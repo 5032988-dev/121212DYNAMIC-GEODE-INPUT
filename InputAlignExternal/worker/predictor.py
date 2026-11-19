@@ -110,7 +110,9 @@ def load_simulator(text: str):
 
 
 class Predictor:
-    def __init__(self, sim, *, sensor_settings=None):
+    def __init__(self, sim, *, sensor_settings=None, diagnostics=None):
+        self.diagnostics = diagnostics
+        self.last_outcome = "idle"
         self.obstacle_sensor = ObstacleSensor(sim.level, **sensor_settings) if sensor_settings is not None else None
         self.last_obstacle = None
         self.sim = sim
@@ -134,6 +136,15 @@ class Predictor:
             self.native.restype = ctypes.c_int
 
     def synchronize(self, header, actual, history, count):
+        try:
+            return self._synchronize(header, actual, history, count)
+        except (ValueError, OverflowError, RuntimeError) as error:
+            journal = getattr(self, 'diagnostics', None)
+            if journal is not None and self.rejected and self.session == header.session:
+                journal.record(self, header, actual, history, count, error)
+            raise
+
+    def _synchronize(self, header, actual, history, count):
         if self.session is not None and header.session < self.session:
             raise ValueError('Intento antiguo')
         if header.session != self.session:
@@ -154,10 +165,14 @@ class Predictor:
             self.rejected = True
             raise ValueError('Falta historial; reinicia el intento')
         try:
-            while self.tick < header.tick:
-                held = bool(history >> (header.tick - self.tick - 1) & 1)
-                self.state = self.sim.step(self.state, held)
-                self.tick += 1
+            if isinstance(self.sim, FastSimulator) and callable(getattr(self.sim, "replay", None)):
+                self.state = self.sim.replay(self.state, history, header.tick-self.tick)
+                self.tick = header.tick
+            else:
+                while self.tick < header.tick:
+                    held = bool(history >> (header.tick - self.tick - 1) & 1)
+                    self.state = self.sim.step(self.state, held)
+                    self.tick += 1
             view = self.sim.view(self.state, include_lists=False)
             expected = state_tuple(view)
             # A button may change between physics updates; history applies that edge on the next step.
@@ -171,11 +186,13 @@ class Predictor:
         return view
 
     def forecast(self, header, actual, history, count, horizon, budget, options, *, clock=time.perf_counter):
+        self.last_outcome = "disabled"
         self.last_obstacle = None
         view = self.synchronize(header, actual, history, count)
         if self.obstacle_sensor is not None:
             self.last_obstacle = self.obstacle_sensor.query(view['x'])
             if not self.obstacle_sensor.should_search(self.last_obstacle):
+                self.last_outcome = "sensor_clear"
                 return None
         if not actual[4] & VALID or not horizon:
             return None
@@ -185,10 +202,12 @@ class Predictor:
             key = (header, tuple(actual), history, count, horizon, budget, options,
                    self.sim, self.state, self.native)
             if key == self._cached_query:
+                self.last_outcome = "cached"
                 return self._cached_decision
             self._cached_query = self._cached_decision = None
             buffer = ctypes.create_string_buffer(HEADER.size + DECISION_BODY.size)
             result = self.native(self.sim._h, self.state._h, horizon, budget, 4, options, int(bool(actual[4] & HELD)), buffer)
+            self.last_outcome = {0: "direct", 1: "correction", 2: "deadline", 3: "unsupported"}.get(result, "error")
             if result == 1:
                 response = header.pack(DECISION, header.tick + 4) + buffer.raw[HEADER.size:]
                 self._cached_query, self._cached_decision = key, response

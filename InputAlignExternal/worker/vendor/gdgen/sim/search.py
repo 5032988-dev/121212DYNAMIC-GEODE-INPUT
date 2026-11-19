@@ -40,6 +40,10 @@ def find_path(
 ) -> SearchResult:
     """time_limit (seconds) ends the search early with the best attempt so far (passed=False).
     bucket groups states (e.g. by mode and height band) so an over-full frontier keeps every group represented."""
+    if not isinstance(input_period, int) or input_period <= 0:
+        raise ValueError("input_period must be a positive integer")
+    if not isinstance(max_frontier, int) or max_frontier <= 0:
+        raise ValueError("max_frontier must be a positive integer")
     key = key or (lambda st: st.key())
     deadline = time.monotonic() + time_limit if time_limit else None
     frontier: list[tuple[SimState, int]] = [(initial, -1)]   # (state, index into history)

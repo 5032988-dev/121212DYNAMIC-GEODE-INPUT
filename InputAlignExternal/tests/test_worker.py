@@ -227,6 +227,11 @@ class IntegrationTests(unittest.TestCase):
                 game.sendto(frame_packet(Header(FRAME, 0x11, 0x22, 1), wrong), endpoint)
                 response = read_status(1)
                 self.assertEqual(STATUS_BODY.unpack_from(response, HEADER.size)[0], 1)
+                evidence = [json.loads(line) for line in (directory / 'divergences.jsonl').read_text().splitlines()]
+                self.assertEqual(len(evidence), 1)
+                self.assertEqual((evidence[0]['attempt'], evidence[0]['tick']), (1,0))
+                self.assertEqual(evidence[0]['delta']['x'], 100)
+                self.assertNotIn('tokenHi', evidence[0])
                 game.sendto(frame_packet(Header(FRAME, 0x11, 0x22, 2), initial), endpoint)
                 response = read_status(2)
                 self.assertEqual(STATUS_BODY.unpack_from(response, HEADER.size)[0], 0)

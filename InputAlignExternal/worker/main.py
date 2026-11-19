@@ -15,6 +15,7 @@ native = bundle / ('gdsim.dll' if os.name == 'nt' else 'libgdsim.so')
 if native.is_file():
     os.environ['GDGEN_SIM_LIB'] = str(native)
 
+from diagnostics import DivergenceJournal, QueryStats
 from cpu_isolation import isolation
 from obstacles import read_settings as read_sensor_settings
 from protocol import Header, HELLO, decode_frame, status
@@ -60,13 +61,16 @@ def coalesce_frames(predictor, frames):
     return latest
 
 
-def serve(directory: Path, *, stop=None, sensor_settings=None):
+def serve(directory: Path, *, stop=None, sensor_settings=None, diagnostics=True):
     config = json.loads((directory / 'bridge.json').read_text(encoding='utf-8'))
     if config.get('version') != 1 or not 1 <= config['port'] <= 65535:
         raise ValueError('Configuracion de puente invalida')
     token = (int(config['tokenHi'], 16), int(config['tokenLo'], 16))
     endpoint = ('127.0.0.1', config['port'])
     predictor = None
+    journal = DivergenceJournal(directory / "divergences.jsonl") if diagnostics else None
+    statistics = QueryStats()
+    stats_since = time.perf_counter()
     failure = None
     last_hello = last_status = 0.
     last_session = None
@@ -105,7 +109,7 @@ def serve(directory: Path, *, stop=None, sensor_settings=None):
                         path = directory / 'level.txt'
                         if path.stat().st_size > 32 * 1024 * 1024:
                             raise UnsupportedLevel('Nivel demasiado grande')
-                        predictor = Predictor(load_simulator(path.read_text(encoding='utf-8')), sensor_settings=sensor_settings)
+                        predictor = Predictor(load_simulator(path.read_text(encoding='utf-8')), sensor_settings=sensor_settings, diagnostics=journal)
                     except (ValueError, OSError, RuntimeError, OverflowError, AttributeError) as error:
                         failure = str(error)
                 print('Intento', header.session, failure or 'simulador preparado', flush=True)
@@ -123,6 +127,7 @@ def serve(directory: Path, *, stop=None, sensor_settings=None):
                         break
             finally:
                 sock.settimeout(.05)
+            started, cpu_started = time.perf_counter(), time.process_time()
             frame = coalesce_frames(predictor, frames)
             header = frame[0]
             result = None
@@ -135,6 +140,15 @@ def serve(directory: Path, *, stop=None, sensor_settings=None):
                 except (ValueError, OverflowError, RuntimeError) as error:
                     message = str(error)
                     query_error = True
+                statistics.observe('error' if query_error else predictor.last_outcome,
+                                   time.perf_counter()-started, time.process_time()-cpu_started, frame[5])
+                finished = time.perf_counter()
+                if finished - stats_since >= 5:
+                    measured = statistics.report(finished-stats_since)
+                    print(f"Consultas {measured['queries']} | propuestas {measured['proposals']} | "
+                          f"deadline {measured['deadlines']} | fuera de presupuesto {measured['over_budget']} | media {measured['mean_ms']:.2f}ms | "
+                          f"max {measured['max_ms']:.2f}ms | CPU consultas {measured['cpu_percent']:.1f}%", flush=True)
+                    statistics, stats_since = QueryStats(), finished
             if result:
                 sock.send(result)
             if header.session != last_status_session or message != last_message or now - last_status >= 1:
@@ -157,6 +171,8 @@ def main():
                         help='Sobrescribe cpu-isolation.json: auto separa CPU; off conserva la afinidad')
     parser.add_argument('--obstacle-distance', type=float, default=None,
                         help='Distancia horizontal del sensor, 0..12000 unidades GD; no cambia el horizonte')
+    parser.add_argument("--diagnostics", choices=("on", "off"), default="on",
+                        help="Registro acotado de divergencias en la carpeta del mod")
     args = parser.parse_args()
     try:
         if not os.environ.get('GDGEN_SIM_LIB'):
@@ -167,7 +183,7 @@ def main():
             sensor_settings = None
             print(f'Sensor desactivado por configuracion invalida: {error}', file=sys.stderr, flush=True)
         with isolation(bundle, args.cpu_isolation):
-            serve(args.bridge.resolve(), sensor_settings=sensor_settings)
+            serve(args.bridge.resolve(), sensor_settings=sensor_settings, diagnostics=args.diagnostics == "on")
     except (OSError, ValueError, RuntimeError) as error:
         print(f'No se pudo iniciar: {error}', file=sys.stderr, flush=True)
         return 1

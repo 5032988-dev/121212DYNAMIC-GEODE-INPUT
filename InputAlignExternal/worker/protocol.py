@@ -64,4 +64,4 @@ def decision(header, tick, expected, due, delay, down, points):
 
 
 def status(header, code, text):
-    return header.pack(STATUS) + STATUS_BODY.pack(code, text.encode('utf-8')[:119])
+    return header.pack(STATUS) + STATUS_BODY.pack(code, text.encode('utf-8')[:119].decode('utf-8', errors='ignore').encode('utf-8'))

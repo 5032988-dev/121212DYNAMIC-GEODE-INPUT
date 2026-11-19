@@ -89,3 +89,13 @@ class PackagingSelectionTests(unittest.TestCase):
                 for name in ('GUIA-INSTALACION.md', 'IMPLEMENTATION-NOTES.md'):
                     self.assertEqual(z.read(name), name.encode())
                 self.assertNotIn('InputAlignWorker/build/scratch.txt', z.namelist())
+
+            previous = output.read_bytes()
+            for target in ('replace', 'write'):
+                with patch.object(module, 'ROOT', project), patch.object(module, 'PYTHON_RUNTIME_SHA256', hashlib.sha256(runtime.read_bytes()).hexdigest()):
+                    failure = (patch.object(module.os, 'replace', side_effect=OSError('publication failed'))
+                               if target == 'replace' else patch.object(zipfile.ZipFile, 'writestr', side_effect=OSError('write failed')))
+                    with failure, self.assertRaises(OSError):
+                        module.package(build, runtime, output)
+                self.assertEqual(output.read_bytes(), previous)
+                self.assertEqual(list(output.parent.glob(output.name + '.*.tmp')), [])

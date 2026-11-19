@@ -30,7 +30,7 @@ class TransactionalOutputTests(unittest.TestCase):
         import io
         import json
         import zipfile
-        replacements = ['worker/main.py', 'worker/predictor.py', 'worker/cpu_isolation.py',
+        replacements = ['worker/main.py', 'worker/diagnostics.py', 'worker/predictor.py', 'worker/cpu_isolation.py',
                         'worker/cpu-isolation.json', 'worker/obstacles.py', 'worker/obstacle-sensor.json',
                         'GUIA-INSTALACION.md', 'README.md']
         with tempfile.TemporaryDirectory() as directory:

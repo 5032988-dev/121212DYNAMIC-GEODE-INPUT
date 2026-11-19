@@ -18,7 +18,24 @@ Desactiva el InputAlign original, otros buffers de entrada y CBF para esta prueb
 
 Si actualizas una instalación anterior y personalizaste `cpu-isolation.json` u `obstacle-sensor.json`, guarda esos dos archivos y restaura tus ajustes después de copiar el paquete.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:74737032098d64003fd9f989266fd382f78e357318ed8a68e6444caa50ffacd7 -->
+
+## Mejoras de esta entrega
+
+- La caché de timelines elimina sólo la menos usada cuando supera el límite; ya no descarta todas juntas. Mantiene los cálculos exactos y la limpieza entre pasos completos.
+- El historial observado de hasta 64 ticks se reconstruye en una llamada nativa, con el mismo orden de entradas y el mismo estado final. Si falla, se suspende la corrección. No se inventan ticks que falten.
+- Cada cinco segundos, CMD muestra consultas, propuestas del modelo, deadlines, consultas fuera de presupuesto, media/máximo en ms y CPU de las consultas. **Propuestas no significa correcciones aplicadas ni verificadas en el juego.** El tiempo de las consultas incluye reconstrucción y validación; no es una medida de FPS.
+- Al rechazar un intento se registra una divergencia en `divergences.jsonl`, dentro de la carpeta de datos del mod (junto a `bridge.json`). Incluye tick, estado recibido/modelado, diferencias e historial; no incluye tokens ni el nivel. Se guarda una vez por intento y rota entre dos archivos de hasta 2 MiB cada uno. Puedes desactivarlo iniciando CMD con `--diagnostics off`.
+
+El protocolo actual sólo compara posición, velocidad, modo y algunos flags. El registro no convierte esa comparación parcial en una certificación completa del estado real. El contador del puente conserva su comportamiento anterior. CBF real, dual activo y física de objetos desconocidos siguen sin habilitarse. No se ha medido FPS ni fidelidad en GD real.
+
+Las pruebas de Python/DLL de Windows se ejecutaron bajo Wine. Dos pruebas de arranque con aislamiento automático quedaron bloqueadas por `PssCaptureSnapshot`, que Wine no implementa; el aislamiento en Windows real sigue pendiente. El arranque con aislamiento desactivado se comprueba por separado.
+
 ## Uso y ajustes
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 - **Shift+Tab** activa o desactiva la corrección dentro del nivel. El panel IAX muestra `ON` o `OFF`. Si Steam intercepta esa combinación, cambia el atajo de su superposición en la configuración de Steam.
 - <!-- coderabbit-ai-generated:v1 -->

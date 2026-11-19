@@ -57,6 +57,22 @@ int main() {
     dense.finish_engine();
     CHECK(dense.timeline(log)->moves.at(5).size()==10000);
     CHECK(dense.timeline(log)->moves.at(5).back().stop==60);
+    // Exceeding the cache cap must keep recently used exact timelines alive.
+    Level cached; cached.settings = consumed.settings;
+    std::vector<int> logs;
+    for (int i=0;i<65;++i) {
+        int id=cached.logs.append(-1,{0,double(i),1.});
+        logs.push_back(id); cached.timeline(id);
+    }
+    cached.timeline(logs.front()); // Touch the oldest key: it is now recently used.
+    auto retained=cached.timelines.at(logs.front());
+    auto cachedPlayer=Simulator(cached).initial_state();
+    auto replay=Simulator(cached).step(cachedPlayer,false);
+    CHECK(replay.tick==1);
+    CHECK(cached.timelines.size()>=64);
+    CHECK(cached.timelines.count(logs.front())==1);
+    CHECK(cached.timelines.at(logs.front())==retained);
+    CHECK(cached.timelines.count(logs[1])==0);
     // Contacts and prior-contact IDs refer to world sides, independent of gravity.
     Obj block{}; block.index = 42; block.y0 = 150; block.y1 = 180;
     for (bool inverted : {false, true}) {

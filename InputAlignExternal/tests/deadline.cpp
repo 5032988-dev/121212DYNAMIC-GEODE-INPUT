@@ -47,6 +47,16 @@ int main() {
         require(gd_find_path(&search, 10, 1, invalid, 1, 0., 1, &outputSearch, nullptr, 0) == -1);
         require(gd_find_path(&search, 10, 1, 1, invalid, 0., 1, &outputSearch, nullptr, 0) == -1);
     }
+    // Batch replay preserves the original player and catches exceptions at C ABI.
+    level.deadlineActive=true;
+    level.deadline=std::chrono::steady_clock::now()-std::chrono::seconds(1);
+    auto originalTick=player.tick;
+    require(gd_replay(&level,&player,0,64)==nullptr && player.tick==originalTick);
+    require(gd_replay(&level,&player,0,65)==nullptr);
+    level.deadlineActive=false;
+    auto replayed=static_cast<gd::Player*>(gd_replay(&level,&player,0,64));
+    require(replayed && replayed->tick==originalTick+64 && player.tick==originalTick);
+    gd_state_free(replayed);
     // A cancelled query must not leave a deadline active across the C ABI replay call.
     auto next = gd::Simulator(level).step(player, false);
     require(next.tick == 1);

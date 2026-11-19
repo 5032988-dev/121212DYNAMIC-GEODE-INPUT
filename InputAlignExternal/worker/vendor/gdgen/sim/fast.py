@@ -157,6 +157,10 @@ def library() -> ctypes.CDLL:
         raise RuntimeError("simulator core ABI mismatch: rebuild gdsim.cpp")
     if lib.gd_obj_rec_size() != ctypes.sizeof(ObjRec) or lib.gd_state_view_size() != ctypes.sizeof(StateView):
         raise RuntimeError("simulator core record layout differs from fast.py")
+    replay = getattr(lib, "gd_replay", None)
+    if replay is not None:
+        replay.argtypes = [vp, vp, ctypes.c_uint64, i32]
+        replay.restype = vp
     return lib
 
 
@@ -280,6 +284,29 @@ class FastSimulator:
             raise ValueError("State belongs to a different simulator")
         return FastState(self._lib.gd_step(self._h, state._h, int(bool(hold))), self._lib, self)
 
+    def replay(self, state: FastState, history: int, count: int) -> FastState:
+        """Replay up to 64 observed inputs; preserve the caller's original state.
+
+        Optional additive native export; older libraries use equivalent steps.
+        Instances and states follow the same thread-confinement contract as step.
+        """
+        if state._owner is not self:
+            raise ValueError("State belongs to a different simulator")
+        if (type(history) is not int or not 0 <= history < 2**64
+                or type(count) is not int or not 0 <= count <= 64):
+            raise ValueError("Replay history/count outside limits")
+        if count == 0:
+            return state
+        replay = getattr(self._lib, "gd_replay", None)
+        if replay is None:
+            for i in range(count):
+                state = self.step(state, bool(history >> (count-i-1) & 1))
+            return state
+        handle = replay(self._h, state._h, history, count)
+        if not handle:
+            raise RuntimeError("Native history replay failed; correction suspended")
+        return FastState(handle, self._lib, self)
+
     @property
     def unsupported(self) -> dict[str, float]:
         n = self._lib.gd_unsupported(self._h, None, 0)
@@ -295,17 +322,19 @@ class FastSimulator:
     def find_path(self, goal_x: float | None = None, max_ticks: int | None = None, input_period: int = 1,
                   max_frontier: int = 256, time_limit: float | None = None, bucket: bool = True) -> SearchResult:
         """search.find_path over this level, entirely in C++ (bucket: Simulator.bucket frontier pruning)."""
-        if input_period <= 0:
-            raise ValueError("input_period must be positive")
-        if max_frontier <= 0:
-            raise ValueError("max_frontier must be positive")
+        if not isinstance(input_period, int) or not 1 <= input_period <= 2**31-1:
+            raise ValueError("input_period must fit a positive signed 32-bit integer")
+        if not isinstance(max_frontier, int) or not 1 <= max_frontier <= 2**31-1:
+            raise ValueError("max_frontier must fit a positive signed 32-bit integer")
         goal = self.level.length if goal_x is None else goal_x
         ticks = int(goal / (0.7 * 5.98 * 0.25)) + 240 if max_ticks is None else max_ticks
         out = SearchOut()
         cap = ticks + 1
         inputs = (ctypes.c_uint8 * cap)()
-        self._lib.gd_find_path(self._h, goal, ticks, input_period, max_frontier, time_limit or 0.0, int(bucket),
+        status = self._lib.gd_find_path(self._h, goal, ticks, input_period, max_frontier, time_limit or 0.0, int(bucket),
                                ctypes.byref(out), inputs, cap)
+        if status < 0:
+            raise RuntimeError("Native path search rejected its arguments")
         return SearchResult(bool(out.passed), out.max_x, out.ticks, [bool(b) for b in inputs[: out.n_inputs]],
                             out.frontier_peak)
 

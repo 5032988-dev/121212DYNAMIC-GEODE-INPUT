@@ -110,10 +110,12 @@ class NativeContactParityTests(unittest.TestCase):
         from gdgen.sim.fast import FastSimulator, player_fields
         for inverted in (False, True):
             for y in ('0', '60'):
-                level = build_level({'kA2': '1', 'kA8': str(int(inverted))},
+                level = build_level({'kA2': '1', 'kA11': str(int(inverted))},
                                     [{'1': '1', '2': '20', '3': y}])
                 py, native = Simulator(level), FastSimulator(level)
                 p, n = py.initial_state(), native.initial_state()
+                self.assertEqual(p.upside_down, inverted)
+                self.assertEqual(native.view(n)['upside_down'], inverted)
                 for tick in range(80):
                     hold = bool(tick // 9 % 2)
                     p, n = py.step(p, hold), native.step(n, hold)

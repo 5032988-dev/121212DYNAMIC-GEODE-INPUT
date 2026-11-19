@@ -42,6 +42,7 @@ def package(output):
         require(sha(files[name]) == expected, f'Original hash mismatch: {name}')
     replacements = {
         'InputAlignWorker/main.py': ROOT / 'InputAlignExternal/worker/main.py',
+        'InputAlignWorker/diagnostics.py': ROOT / 'InputAlignExternal/worker/diagnostics.py',
         'InputAlignWorker/predictor.py': ROOT / 'InputAlignExternal/worker/predictor.py',
         'InputAlignWorker/cpu_isolation.py': ROOT / 'InputAlignExternal/worker/cpu_isolation.py',
         'InputAlignWorker/cpu-isolation.json': ROOT / 'InputAlignExternal/worker/cpu-isolation.json',

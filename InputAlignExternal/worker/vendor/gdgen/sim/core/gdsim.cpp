@@ -229,6 +229,7 @@ double ease(int kind, double rate, double t) {
 }
 
 struct Timeline {
+    uint64_t lastUse = 0;
     bool truncated = false;
     std::vector<Break> breaks;
     std::vector<long long> break_ticks;
@@ -296,6 +297,7 @@ struct Level {
     std::unordered_map<long long, std::vector<int>> set_buckets;
     std::unordered_map<int, Timeline*> timelines;
     SpeedLogs logs;
+    uint64_t timelineUse = 0;
     std::map<std::string, double> unsupported;
 
     std::unordered_map<int, std::chrono::steady_clock::time_point> timelineRetryAfter;
@@ -368,7 +370,7 @@ struct Level {
 
     Timeline* timeline(int speed_log) {
         auto it = timelines.find(speed_log);
-        if (it != timelines.end()) return it->second;
+        if (it != timelines.end()) { it->second->lastUse = ++timelineUse; return it->second; }
         check_deadline();
         auto retry = timelineRetryAfter.find(speed_log);
         if (deadlineActive && retry != timelineRetryAfter.end() && std::chrono::steady_clock::now() < retry->second)
@@ -386,6 +388,7 @@ struct Level {
             throw;
         }
         check_deadline();
+        tl->lastUse = ++timelineUse;
         timelines.emplace(speed_log, tl);
         owned.release();
         timelineRetryAfter.erase(speed_log);
@@ -829,13 +832,14 @@ struct Simulator {
     Player step(const Player& state, bool hold) {
         L.check_deadline();
         // Evict only between complete steps: collision queries hold pointers into these vectors.
-        if (L.timelines.size() > 64) {
-            for (auto& item : L.timelines) delete item.second;
-            L.timelines.clear();
-        } else {
-            for (auto& item : L.timelines)
-                if (item.second->cache.size() > 64) item.second->cache.clear();
+        while (L.timelines.size() > 64) {
+            auto oldest = std::min_element(L.timelines.begin(), L.timelines.end(),
+                [](auto const& a, auto const& b) { return a.second->lastUse < b.second->lastUse; });
+            delete oldest->second;
+            L.timelines.erase(oldest);
         }
+        for (auto& item : L.timelines)
+            if (item.second->cache.size() > 64) item.second->cache.clear();
         Player p = state;
         p.time += STEP_SECONDS;
         if (p.has_pending_speed) {
@@ -1837,6 +1841,18 @@ void* gd_initial(void* lvl) {
 void* gd_step(void* lvl, void* st, int hold) {
     Simulator sim(*(Level*)lvl);
     return new Player(sim.step(*(Player*)st, hold != 0));
+}
+
+// Additive ABI: old callers retain gd_step. No partial player state crosses C ABI.
+void* gd_replay(void* lvl, void* st, uint64_t history, int count) noexcept {
+    if (!lvl || !st || count < 0 || count > 64) return nullptr;
+    try {
+        Simulator sim(*static_cast<Level*>(lvl));
+        auto player = std::make_unique<Player>(*static_cast<Player*>(st));
+        for (int i = 0; i < count; ++i)
+            *player = sim.step(*player, ((history >> (count-i-1)) & 1) != 0);
+        return player.release();
+    } catch (...) { return nullptr; }
 }
 
 void gd_state_free(void* st) { delete (Player*)st; }

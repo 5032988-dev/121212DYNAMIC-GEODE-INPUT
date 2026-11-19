@@ -5,6 +5,8 @@ Works on a Windows build host or a Linux cross-build host. The resulting console
 import argparse
 import hashlib
 import json
+import os
+import tempfile
 from pathlib import Path
 import zipfile
 
@@ -83,8 +85,18 @@ def package(build: Path, runtime: Path, output: Path, *, native: Path | None = N
         'sha256': {name: hashlib.sha256(data).hexdigest() for name, data in sorted(members.items())},
     }, indent=2).encode() + b'\n'
     output.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
-        for name, data in sorted(members.items()): archive.writestr(name, data)
+    fd, name = tempfile.mkstemp(prefix=output.name + '.', suffix='.tmp', dir=output.parent)
+    os.close(fd)
+    temporary = Path(name)
+    try:
+        with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
+            for name, data in sorted(members.items()): archive.writestr(name, data)
+        with zipfile.ZipFile(temporary) as archive:
+            if archive.testzip() is not None:
+                raise ValueError('Invalid output ZIP CRC')
+        os.replace(temporary, output)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 if __name__ == '__main__':
