@@ -115,6 +115,8 @@ class Predictor:
         self.tick = 0
         self.session = None
         self.rejected = False
+        self._cached_query = None
+        self._cached_decision = None
         version = getattr(sim._lib, 'iax_adapter_version', None)
         if version is None or version() != 4:
             raise RuntimeError('Falta adaptador v4: compila worker/branch.cpp con CMake o copia completa InputAlignWorker')
@@ -129,12 +131,18 @@ class Predictor:
             self.native.restype = ctypes.c_int
 
     def synchronize(self, header, actual, history, count):
+        if self.session is not None and header.session < self.session:
+            raise ValueError('Intento antiguo')
         if header.session != self.session:
+            self._cached_query = self._cached_decision = None
+            # Mark the new attempt rejected until its simulator is fully initialized.
+            # A failed initialization must not be retried with a partly changed model.
+            self.tick, self.session, self.rejected = 0, header.session, True
             if self.sim.unsupported:
                 # Notes are cumulative inside the dependency; they belong to one attempt, not the next.
                 self.sim = FastSimulator(self.sim.level)
             self.state = self.sim.initial_state()
-            self.tick, self.session, self.rejected = 0, header.session, False
+            self.rejected = False
         if self.rejected:
             raise ValueError('Estado divergente; reinicia el intento')
         if header.tick < self.tick:
@@ -142,18 +150,21 @@ class Predictor:
         if header.tick - self.tick > count:
             self.rejected = True
             raise ValueError('Falta historial; reinicia el intento')
-        while self.tick < header.tick:
-            held = bool(history >> (header.tick - self.tick - 1) & 1)
-            self.state = self.sim.step(self.state, held)
-            self.tick += 1
-        view = self.sim.view(self.state, include_lists=False)
-        expected = state_tuple(view)
-        # A button may change between physics updates; history applies that edge on the next step.
-        physical_actual = (*actual[:4], actual[4] & ~HELD)
-        physical_expected = (*expected[:4], expected[4] & ~HELD)
-        if self.sim.unsupported or view['dead'] or not matches(physical_actual, physical_expected):
+        try:
+            while self.tick < header.tick:
+                held = bool(history >> (header.tick - self.tick - 1) & 1)
+                self.state = self.sim.step(self.state, held)
+                self.tick += 1
+            view = self.sim.view(self.state, include_lists=False)
+            expected = state_tuple(view)
+            # A button may change between physics updates; history applies that edge on the next step.
+            physical_actual = (*actual[:4], actual[4] & ~HELD)
+            physical_expected = (*expected[:4], expected[4] & ~HELD)
+            if self.sim.unsupported or view['dead'] or not matches(physical_actual, physical_expected):
+                raise ValueError('Fisica no coincide; correccion suspendida hasta reiniciar')
+        except (ValueError, OverflowError, RuntimeError):
             self.rejected = True
-            raise ValueError('Fisica no coincide; correccion suspendida hasta reiniciar')
+            raise
         return view
 
     def forecast(self, header, actual, history, count, horizon, budget, options, *, clock=time.perf_counter):
@@ -161,10 +172,19 @@ class Predictor:
         if not actual[4] & VALID or not horizon:
             return None
         if self.native and clock is time.perf_counter:
+            # One exact successful query only. Synchronization above must still
+            # pass on every packet; no partial state or failed search is reused.
+            key = (header, tuple(actual), history, count, horizon, budget, options,
+                   self.sim, self.state, self.native)
+            if key == self._cached_query:
+                return self._cached_decision
+            self._cached_query = self._cached_decision = None
             buffer = ctypes.create_string_buffer(HEADER.size + DECISION_BODY.size)
             result = self.native(self.sim._h, self.state._h, horizon, budget, 4, options, int(bool(actual[4] & HELD)), buffer)
             if result == 1:
-                return header.pack(DECISION, header.tick + 4) + buffer.raw[HEADER.size:]
+                response = header.pack(DECISION, header.tick + 4) + buffer.raw[HEADER.size:]
+                self._cached_query, self._cached_decision = key, response
+                return response
             if result in (0, 2):
                 return None
             if result == 3:

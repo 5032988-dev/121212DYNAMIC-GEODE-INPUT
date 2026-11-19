@@ -16,7 +16,62 @@
 
 Referencia: [Manual del editor, sección Stop, página impresa 66](https://static.wikia.nocookie.net/geometry-dash/images/8/83/GDEditor-v2.2.pdf/revision/latest?cb=20231220033307). La prueba antigua de igualdad entre motores para Stop se conserva mediante acceso directo al motor; ya no representa autorización de esa mecánica en el predictor.
 
-El paquete conserva las DLL originales; los cambios funcionales están en main.py y predictor.py. No se ha probado en Geometry Dash ni medido FPS. No es una versión final.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:7250c3f6c65cd97b815a9b370cfe16d846441b42c37e895b2e5827942e2b2bd7 -->
+
+La sincronización rechaza paquetes de intentos anteriores y suspende el intento si falla la inicialización o el replay del estado. Durante la agrupación UDP, los paquetes del mismo tick se ordenan también por época de entrada. Estas protecciones evitan reiniciar o reutilizar un estado incompleto; no demuestran equivalencia física con el juego.
+
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:0f7b336813f8219a0f29830fc4525c5574e3cdcdc00b8ad08cfd2bfc6e0a2a57 -->
+
+El worker conserva como máximo una decisión nativa completada y la reutiliza únicamente ante la misma consulta, estado reconstruido e instancia del simulador. Siempre vuelve a validar el estado real antes de consultar esa caché. Cambiar tick, intento, entrada, época, historial, horizonte o presupuesto evita la reutilización; los resultados incompletos no se almacenan. El horizonte de supervivencia no se reduce.
+
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:1294d74b4ae01a7c7e509683c314d81fcdc54abb024e0fb816e1cc3f11b6ea98 -->
+
+## Aislamiento de CPU del worker
+
+El paquete añade `cpu_isolation.py` y `cpu-isolation.json` junto a las reparaciones de `main.py` y `predictor.py`. Conserva las DLL originales; no requiere recompilar el mod para esta opción. **No está validado todavía en Windows ni dentro de GD y no hay mediciones nuevas de FPS.**
+
+Al abrir **IAX > Abrir CMD**, el worker intenta separar su afinidad de la de GD: reserva el último núcleo físico completo disponible para la simulación y retira sus hilos SMT de la máscara del juego. Se exigen al menos cuatro núcleos físicos completos disponibles para GD antes de reservar uno. No amplía afinidades existentes. Se mantiene la prioridad Below Normal del worker. No cambia la GPU: gdsim realiza sus cálculos en CPU.
+
+Configura `worker/cpu-isolation.json` **antes de abrir la consola**:
+
+```json
+{
+  "enabled": true,
+  "worker_core": null,
+  "game_pid": null
+}
+```
+
+- `enabled: false` desactiva el aislamiento al siguiente arranque del worker. Para quitar una separación ya activa, cierra con Ctrl+C la consola antes de abrirla de nuevo.
+- `worker_core: null` elige automáticamente en CPUs homogéneas. En CPUs híbridas se rechaza la selección automática; el CMD muestra índices, máscaras y clases de los núcleos. Pon el índice físico elegido (por ejemplo `3`), no un número de procesador lógico. No se puede afirmar que reservar un núcleo lento mejore el presupuesto.
+- `game_pid: null` usa el proceso padre y comprueba que sea `GeometryDash.exe`. Al arrancar manualmente desde CMD, especifica el PID real de GD. Nunca se modifica cmd.exe por error.
+- Alternativa por línea de comandos: `python.exe main.py --bridge "RUTA_DE_DATOS" --cpu-isolation off` o `auto`. La opción prevalece sobre `enabled` en un archivo válido.
+
+Solo se soporta Windows x64 con un grupo de procesadores. Ante configuración inválida, permisos insuficientes, otra consola gestionando el mismo GD o una topología incompatible, se avisa y el worker continúa sin activar aislamiento. Las asignaciones se leen de nuevo tras aplicarlas; un fallo parcial intenta restaurarlas.
+
+Al terminar normalmente, por Ctrl+C o por error Python, se restauran las afinidades originales que sigan coincidiendo con las aplicadas por el worker. Se intenta también al cerrar la ventana. **Terminar el proceso a la fuerza o un crash nativo puede impedir la limpieza: reinicia GD para recuperar su afinidad predeterminada.** Los cambios manuales posteriores de afinidad se conservan.
+
+Esto separa dónde pueden ejecutarse GD y el worker; otros procesos de Windows aún pueden utilizar esos núcleos. Comparten cachés, memoria, energía y temperatura. En 4 núcleos GD queda con 3, lo cual puede empeorar su rendimiento; compara activado/desactivado antes de adoptarlo. No garantiza cumplir 6/3 ms ni eliminar bajones.
+
+## Estado de la simulación de bloques personalizados
+
+Un bloque construido con objetos conocidos conserva las colisiones de sus componentes según el modelo existente: sólidos, pendientes, peligros y sus propiedades admitidas. Su aspecto visual no determina la colisión. Las transformaciones estáticas conocidas ya se procesan; no se ha añadido física nueva en esta actualización.
+
+**No se simula cualquier objeto arbitrario.** Un ID desconocido o una mecánica no modelada suspende la corrección. Rotate/Follow/Scale dinámicos, Area, Keyframe, Touch real, dual y CBF activo siguen fuera. Ignorar esos efectos permitiría dibujar trayectorias, pero violaría la garantía de correcciones verificables.
+
+Para ampliar esa cobertura hacen falta capturas de referencia del juego: colisionadores y transformaciones efectivos, activaciones de triggers y estado físico completo por tick. El protocolo actual no transmite todo ello. Sin esa referencia, ampliar la lista de IDs no demuestra la física de un bloque personalizado. El siguiente paso de implementación debe ser capturar y contrastar esos datos antes de habilitar cada nueva mecánica.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
+<!-- /coderabbit-ai-generated:v1 -->
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 
 <!-- /coderabbit-ai-generated:v1 -->

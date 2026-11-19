@@ -27,6 +27,19 @@ class HistoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'historial'):
             p.synchronize(Header(FRAME,1,2,1,65),state,0,64)
 
+    def test_old_session_packet_cannot_reset_real_native_state(self):
+        p=Predictor(load_simulator('kA2,0;'))
+        initial=p.sim.initial_state()
+        p.synchronize(Header(FRAME,1,2,2,0),state_tuple(p.sim.view(initial)),0,0)
+        next_state=p.sim.step(initial,False)
+        actual=state_tuple(p.sim.view(next_state))
+        p.synchronize(Header(FRAME,1,2,2,1),actual,0,1)
+        with self.assertRaisesRegex(ValueError,'antiguo'):
+            p.synchronize(Header(FRAME,1,2,1,0),state_tuple(p.sim.view(initial)),0,0)
+        self.assertEqual((p.session,p.tick,p.rejected),(2,1,False))
+        p.synchronize(Header(FRAME,1,2,2,1),actual,0,1)
+        self.assertFalse(p.rejected)
+
     def test_new_attempt_can_recover_after_rejected_session(self):
         p=Predictor(load_simulator('kA2,0;'))
         p.session=1;p.rejected=True

@@ -15,14 +15,17 @@ native = bundle / ('gdsim.dll' if os.name == 'nt' else 'libgdsim.so')
 if native.is_file():
     os.environ['GDGEN_SIM_LIB'] = str(native)
 
+from cpu_isolation import isolation
 from protocol import Header, HELLO, decode_frame, status
 from predictor import Predictor, UnsupportedLevel, load_simulator
 
 
 def newer_frame(predictor, frame, queued):
-    if (queued[0].session, queued[0].tick) < (frame[0].session, frame[0].tick):
+    if (queued[0].session, queued[0].tick, queued[0].epoch) < (frame[0].session, frame[0].tick, frame[0].epoch):
         return frame
-    if predictor is not None and (not predictor.rejected or predictor.session != frame[0].session):
+    if (predictor is not None
+            and (predictor.session is None or frame[0].session >= predictor.session)
+            and (not predictor.rejected or predictor.session != frame[0].session)):
         known = predictor.tick if predictor.session == queued[0].session else 0
         if queued[0].tick - known > queued[3]:
             # Validate/replay retained history before the newer window discards it.
@@ -120,11 +123,14 @@ def serve(directory: Path, *, stop=None):
 def main():
     parser = argparse.ArgumentParser(description='Simulador local de Input Align External')
     parser.add_argument('--bridge', type=Path, required=True, help='Carpeta de datos del mod')
+    parser.add_argument('--cpu-isolation', choices=('auto', 'off'), default=None,
+                        help='Sobrescribe cpu-isolation.json: auto separa CPU; off conserva la afinidad')
     args = parser.parse_args()
     try:
         if not os.environ.get('GDGEN_SIM_LIB'):
             raise RuntimeError('Falta gdsim.dll. Copia el contenido completo de InputAlignWorker o compila con CMake.')
-        serve(args.bridge.resolve())
+        with isolation(bundle, args.cpu_isolation):
+            serve(args.bridge.resolve())
     except (OSError, ValueError, RuntimeError) as error:
         print(f'No se pudo iniciar: {error}', file=sys.stderr, flush=True)
         return 1

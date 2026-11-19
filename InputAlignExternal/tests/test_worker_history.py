@@ -80,6 +80,66 @@ class HistoryTests(unittest.TestCase):
         self.assertIs(newer_frame(predictor, frame(60), queued), queued)
         predictor.synchronize.assert_not_called()
 
+    def test_delayed_old_attempt_cannot_reset_the_current_attempt(self):
+        predictor = object.__new__(Predictor)
+        predictor.session, predictor.tick, predictor.rejected = 2, 10, True
+        predictor.sim = Mock(unsupported={})
+        predictor.state = object()
+        with self.assertRaisesRegex(ValueError, 'antiguo'):
+            predictor.synchronize(*frame(0, session=1)[:4])
+        self.assertEqual((predictor.session, predictor.tick, predictor.rejected), (2, 10, True))
+        predictor.sim.initial_state.assert_not_called()
+
+    def test_direct_replay_errors_suspend_until_the_next_attempt(self):
+        for error in (ValueError('bad state'), OverflowError('overflow'), RuntimeError('native error')):
+            with self.subTest(error=type(error).__name__):
+                predictor = object.__new__(Predictor)
+                predictor.session, predictor.tick, predictor.rejected = 1, 0, False
+                predictor.state = object()
+                predictor.sim = Mock(unsupported={})
+                predictor.sim.step.side_effect = error
+                predictor.native = Mock()
+                with self.assertRaises(type(error)):
+                    predictor.forecast(*frame(1))
+                self.assertTrue(predictor.rejected)
+                predictor.sim.step.reset_mock(side_effect=True)
+                with self.assertRaisesRegex(ValueError, 'Estado divergente'):
+                    predictor.forecast(*frame(1))
+                predictor.sim.step.assert_not_called()
+                predictor.native.assert_not_called()
+
+    def test_delayed_same_tick_older_input_epoch_is_not_selected(self):
+        predictor = self.predictor()
+        newer = list(frame(20))
+        newer[0] = Header(FRAME, 11, 22, 1, 20, 5)
+        older = list(frame(20))
+        older[0] = Header(FRAME, 11, 22, 1, 20, 4)
+        self.assertIs(newer_frame(predictor, newer, older), newer)
+        self.assertIs(newer_frame(predictor, older, newer), newer)
+        predictor.synchronize.assert_not_called()
+
+    def test_stale_previous_session_is_not_replayed_when_new_session_is_known(self):
+        predictor = self.predictor()
+        predictor.session, predictor.tick = 2, 0
+        previous, queued = frame(60, session=1), frame(100, session=2)
+        self.assertIs(newer_frame(predictor, previous, queued), queued)
+        predictor.synchronize.assert_not_called()
+        self.assertFalse(predictor.rejected)
+
+    def test_failed_new_attempt_initialization_is_not_retried_in_same_attempt(self):
+        predictor = object.__new__(Predictor)
+        predictor.session, predictor.tick, predictor.rejected = 1, 10, False
+        predictor.state = object()
+        predictor.sim = Mock(unsupported={})
+        predictor.sim.initial_state.side_effect = RuntimeError('cannot initialize')
+        with self.assertRaises(RuntimeError):
+            predictor.synchronize(*frame(0, session=2)[:4])
+        self.assertEqual(predictor.session, 2)
+        self.assertTrue(predictor.rejected)
+        with self.assertRaisesRegex(ValueError, 'Estado divergente'):
+            predictor.synchronize(*frame(0, session=2)[:4])
+        predictor.sim.initial_state.assert_called_once()
+
 
 if __name__ == '__main__':
     unittest.main()

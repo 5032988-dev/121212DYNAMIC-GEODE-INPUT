@@ -1,4 +1,4 @@
-"""CodeRabbit-generated: rebuild the supplied bundle with only the reviewed Python fix.
+"""CodeRabbit-generated: rebuild the supplied bundle with the Python fixes and configurable CPU isolation.
 
 Does not compile or certify either native DLL. Original artifacts remain byte-identical.
 """
@@ -41,18 +41,24 @@ def package(output):
     replacements = {
         'InputAlignWorker/main.py': ROOT / 'InputAlignExternal/worker/main.py',
         'InputAlignWorker/predictor.py': ROOT / 'InputAlignExternal/worker/predictor.py',
+        'InputAlignWorker/cpu_isolation.py': ROOT / 'InputAlignExternal/worker/cpu_isolation.py',
+        'InputAlignWorker/cpu-isolation.json': ROOT / 'InputAlignExternal/worker/cpu-isolation.json',
         'README.md': ROOT / 'InputAlignExternal/README.md',
     }
-    before = {name: sha(files[name]) for name in replacements}
+    before = {name: sha(files[name]) if name in files else None for name in replacements}
     for name, path in replacements.items():
         files[name] = path.read_bytes()
         provenance['sha256'][name] = sha(files[name])
     provenance['workerPatch'] = {
         'generatedBy': 'CodeRabbit Coding Agent',
-        'id': 'history-and-stop-safety-1',
+        'id': 'physical-core-isolation-4',
         'originalArchiveSha256': sha(original.read_bytes()),
         'originalFileSha256': before,
-        'changes': ['Reject the attempt after a replay error during UDP coalescing; keep the worker running.', 'Reject Stop/Pause/Resume levels before constructing an unverified model.'],
+        'changes': ['Reject the attempt after initialization or replay errors; keep the worker running.',
+                    'Discard older attempts and prefer the newer input epoch for packets at the same tick.',
+                    'Reuse one exact successful prediction after fresh state validation; retry incomplete searches.',
+                    'Reject Stop/Pause/Resume levels before constructing an unverified model.',
+                    'Optionally reserve one physical CPU core for the worker, verify masks and restore on normal exit; GPU unchanged.'],
         'nativeBinariesRebuilt': False,
         'validation': 'Python regression tests on Linux; Windows and gameplay not tested.',
         'sourceArchive': 'InputAlignExternal-v0.3-source.zip',
