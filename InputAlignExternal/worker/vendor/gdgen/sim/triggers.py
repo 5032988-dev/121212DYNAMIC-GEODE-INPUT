@@ -182,6 +182,9 @@ def parse_triggers(objects: list[dict[str, str]]) -> tuple[list[Trigger], dict[s
             t.enable = o.get("56") == "1"
         elif oid == SPAWN:
             t.delay = _f(o, "63")
+            ticks = t.delay * TICKS_PER_SECOND
+            if not math.isfinite(ticks) or t.delay < 0 or ticks >= 2**63:
+                raise ValueError("Spawn delay must fit nonnegative signed 64-bit ticks")
         triggers.append(t)
     return triggers, approx
 
@@ -263,6 +266,8 @@ class Timeline:
                 unstopped[trig.target] = cursor
             elif trig.kind == SPAWN:
                 at = tick + round(trig.delay * TICKS_PER_SECOND)
+                if not -(2**63) <= at < 2**63:
+                    raise ValueError("Spawn event exceeds signed 64-bit timeline")
                 for child in self.engine.by_group.get(trig.target, ()):
                     if len(heap) >= MAX_EVENTS:
                         self.engine.approximations["spawn loop cut"] = 1

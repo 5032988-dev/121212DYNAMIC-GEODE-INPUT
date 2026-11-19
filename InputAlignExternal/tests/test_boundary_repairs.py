@@ -37,3 +37,13 @@ class BoundaryRepairsTests(unittest.TestCase):
         sim._lib.gd_find_path.return_value=-1
         with self.assertRaises(RuntimeError):sim.find_path(max_ticks=1)
         sim._lib=library
+
+    def test_spawn_delays_are_finite_nonnegative_and_representable(self):
+        from gdgen.sim.triggers import parse_triggers, TriggerEngine
+        for value in ('-1','nan','inf','1e100',str(2**63/240)):
+            with self.assertRaises(ValueError):parse_triggers([{'1':'1268','63':value}])
+        triggers,_=parse_triggers([{'1':'1268','63':'0'}])
+        self.assertEqual(triggers[0].delay,0)
+        triggers,_=parse_triggers([{'1':'1268','63':'1'}])
+        with self.assertRaises(ValueError):
+            TriggerEngine(triggers,[],set()).timeline(((2**63-2,0.,1.),))

@@ -21,6 +21,7 @@
 #ifdef _WIN32
 #include "../../../../WindowsMath.hpp"
 #endif
+#include <limits>
 #include <map>
 #include <memory>
 #include <queue>
@@ -431,7 +432,15 @@ struct Level {
                     if (tick < seg.start + seg.ticks) seg.stop = std::min(seg.stop, tick);
                 }
             } else if (trig.kind == SPAWN) {
-                long long at = tick + (long long)py_round(trig.delay * TICKS_PER_SECOND);
+                double raw = trig.delay * TICKS_PER_SECOND;
+                if (!std::isfinite(raw) || raw < 0 || raw >= std::ldexp(1., 63)) {
+                    tl.truncated = true; note("spawn timing out of range", 0.); return;
+                }
+                auto offset = static_cast<long long>(py_round(raw));
+                if (tick > std::numeric_limits<long long>::max() - offset) {
+                    tl.truncated = true; note("spawn timing out of range", 0.); return;
+                }
+                long long at = tick + offset;
                 auto it = by_group.find(trig.target);
                 if (it != by_group.end())
                     for (int child : it->second) {

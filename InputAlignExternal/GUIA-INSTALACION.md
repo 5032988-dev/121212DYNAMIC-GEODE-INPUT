@@ -29,7 +29,15 @@ Si actualizas una instalación anterior y personalizaste `cpu-isolation.json` u 
 - Cada cinco segundos, CMD muestra consultas, propuestas del modelo, deadlines, consultas fuera de presupuesto, media/máximo en ms y CPU de las consultas. **Propuestas no significa correcciones aplicadas ni verificadas en el juego.** El tiempo de las consultas incluye reconstrucción y validación; no es una medida de FPS.
 - Al rechazar un intento se registra una divergencia en `divergences.jsonl`, dentro de la carpeta de datos del mod (junto a `bridge.json`). Incluye tick, estado recibido/modelado, diferencias e historial; no incluye tokens ni el nivel. Se guarda una vez por intento y rota entre dos archivos de hasta 2 MiB cada uno. Puedes desactivarlo iniciando CMD con `--diagnostics off`.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:9414aea97766cf5751d19da8b5e75848dab33e932e8ff068a3cf4ca29b4c1dfa -->
+
+El contador de deadline de la consola incluye el aplazamiento conservador de reintentos de timelines frías durante hasta 50 ms; no todas esas consultas agotaron su propio presupuesto. La cifra «fuera de presupuesto» mide por separado el tiempo real de la consulta.
+
 El protocolo actual sólo compara posición, velocidad, modo y algunos flags. El registro no convierte esa comparación parcial en una certificación completa del estado real. El contador del puente conserva su comportamiento anterior. CBF real, dual activo y física de objetos desconocidos siguen sin habilitarse. No se ha medido FPS ni fidelidad en GD real.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 Las pruebas de Python/DLL de Windows se ejecutaron bajo Wine. Dos pruebas de arranque con aislamiento automático quedaron bloqueadas por `PssCaptureSnapshot`, que Wine no implementa; el aislamiento en Windows real sigue pendiente. El arranque con aislamiento desactivado se comprueba por separado.
 

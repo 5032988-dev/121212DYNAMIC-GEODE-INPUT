@@ -12,6 +12,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - uses: geode-sdk/build-geode-mod@61a56c697aea9655e3f31c6c1b83870431f30434
         with:
           sdk: v5.11.2

@@ -73,6 +73,13 @@ int main() {
     CHECK(cached.timelines.count(logs.front())==1);
     CHECK(cached.timelines.at(logs.front())==retained);
     CHECK(cached.timelines.count(logs[1])==0);
+    for (double delay : {-1., std::numeric_limits<double>::infinity(), 1e100, 1.}) {
+        Level invalid; Trigger child{}; child.kind=SPAWN; child.delay=delay;
+        invalid.triggers={child}; invalid.finish_engine();
+        int badLog=invalid.logs.append(-1,{std::numeric_limits<long long>::max()-2,0.,1.});
+        CHECK(invalid.timeline(badLog)->truncated);
+        CHECK(invalid.unsupported.count("spawn timing out of range")==1);
+    }
     // Contacts and prior-contact IDs refer to world sides, independent of gravity.
     Obj block{}; block.index = 42; block.y0 = 150; block.y1 = 180;
     for (bool inverted : {false, true}) {
