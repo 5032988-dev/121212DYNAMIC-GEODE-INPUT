@@ -15,7 +15,7 @@ iax::State wire(gd::Player const& p) {
 }
 }
 
-// Return 1 only for a fully checked correction; 0=direct, 2=deadline, 3=unsupported, -1=error.
+// Return 1 only for a fully checked correction; 0=direct, 2=deadline, 3=unsupported, 4=deferred, -1=error.
 extern "C" void iax_clear_preview_notes(void* level) noexcept {
     if (level) static_cast<gd::Level*>(level)->unsupported.clear();
 }
@@ -115,6 +115,7 @@ extern "C" int iax_predict_v2(void* level, void* state, int horizon, int budgetU
             }
         }
         return 0;
-    } catch (gd::DeadlineExceeded const&) { return 2; }
+    } catch (gd::TimelineDeferred const&) { return 4; }
+    catch (gd::DeadlineExceeded const&) { return 2; }
     catch (...) { return -1; }
 }

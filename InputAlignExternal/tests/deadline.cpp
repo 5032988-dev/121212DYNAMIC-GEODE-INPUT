@@ -1,6 +1,8 @@
 #include "../worker/branch.cpp"
 #include <stdexcept>
-void require(bool ok) { if (!ok) throw std::runtime_error("deadline invariant"); }
+#include <string>
+void require_impl(bool ok, int line) { if (!ok) throw std::runtime_error("deadline invariant line " + std::to_string(line)); }
+#define require(ok) require_impl((ok), __LINE__)
 int main() {
     gd::Level level;
     level.settings.start_speed = 0.9;
@@ -19,6 +21,11 @@ int main() {
     // Backoff affects speculative availability only, never unbudgeted real replay.
     int log = player.speed_log;
     level.timelineRetryAfter[log] = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    level.engine_sets=true; // Exercise the dynamic timeline query during lead replay.
+    output.delay=123;
+    require(iax_predict_v2(&level,&player,1,6000,4,0,0,&output)==4);
+    require(output.delay==123 && !level.deadlineActive);
+    level.engine_sets=false;
     level.deadlineActive = true;
     level.deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
     cancelled = false;

@@ -207,12 +207,12 @@ class Predictor:
             self._cached_query = self._cached_decision = None
             buffer = ctypes.create_string_buffer(HEADER.size + DECISION_BODY.size)
             result = self.native(self.sim._h, self.state._h, horizon, budget, 4, options, int(bool(actual[4] & HELD)), buffer)
-            self.last_outcome = {0: "direct", 1: "correction", 2: "deadline", 3: "unsupported"}.get(result, "error")
+            self.last_outcome = {0: "direct", 1: "correction", 2: "deadline", 3: "unsupported", 4: "deferred"}.get(result, "error")
             if result == 1:
                 response = header.pack(DECISION, header.tick + 4) + buffer.raw[HEADER.size:]
                 self._cached_query, self._cached_decision = key, response
                 return response
-            if result in (0, 2):
+            if result in (0, 2, 4):
                 return None
             if result == 3:
                 return None  # Unrepresentable future: keep real-state synchronization alive.

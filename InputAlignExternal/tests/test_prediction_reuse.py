@@ -16,6 +16,14 @@ class PredictionReuseTests(unittest.TestCase):
         actual = state_tuple(self.predictor.sim.view(self.predictor.state))
         self.frame = (Header(FRAME,1,2,1), (*actual[:4], actual[4]|VALID), 0,0,80,20000,0)
 
+    def test_deferred_timeline_is_not_a_deadline_or_cached_decision(self):
+        self.predictor.native = Mock(return_value=4)
+        for _ in range(2):
+            self.assertIsNone(self.predictor.forecast(*self.frame))
+            self.assertEqual(self.predictor.last_outcome, 'deferred')
+            self.assertFalse(self.predictor.rejected)
+        self.assertEqual(self.predictor.native.call_count, 2)
+
     def test_identical_verified_query_uses_one_native_search(self):
         first = self.predictor.forecast(*self.frame)
         self.assertIsNotNone(first)

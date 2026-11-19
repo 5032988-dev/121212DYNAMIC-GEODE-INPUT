@@ -64,13 +64,14 @@ class DivergenceJournal:
 class QueryStats:
     """Constant-space counters over a reporting window, no per-frame file I/O."""
     def __init__(self):
-        self.queries = self.proposals = self.deadlines = self.over_budget = self.cached = 0
+        self.queries = self.proposals = self.deadlines = self.deferred = self.over_budget = self.cached = 0
         self.elapsed = self.cpu = self.maximum = 0.
 
     def observe(self, outcome: str, elapsed: float, cpu: float, budget_us: int):
         self.queries += 1
         self.proposals += outcome == 'correction'
         self.deadlines += outcome == 'deadline'
+        self.deferred += outcome == 'deferred'
         self.cached += outcome == 'cached'
         self.over_budget += elapsed * 1e6 > budget_us
         self.elapsed += elapsed
@@ -79,6 +80,6 @@ class QueryStats:
 
     def report(self, seconds: float):
         return {'queries': self.queries, 'proposals': self.proposals, 'deadlines': self.deadlines,
-                'over_budget': self.over_budget, 'cached': self.cached,
+                'deferred': self.deferred, 'over_budget': self.over_budget, 'cached': self.cached,
                 'mean_ms': self.elapsed * 1000 / max(1,self.queries), 'max_ms': self.maximum * 1000,
                 'cpu_percent': self.cpu * 100 / max(.001,seconds)}

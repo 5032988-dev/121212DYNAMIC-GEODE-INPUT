@@ -33,7 +33,13 @@ Si actualizas una instalación anterior y personalizaste `cpu-isolation.json` u 
 
 <!-- coderabbit-ai-generated-section:v1:9414aea97766cf5751d19da8b5e75848dab33e932e8ff068a3cf4ca29b4c1dfa -->
 
-El contador de deadline de la consola incluye el aplazamiento conservador de reintentos de timelines frías durante hasta 50 ms; no todas esas consultas agotaron su propio presupuesto. La cifra «fuera de presupuesto» mide por separado el tiempo real de la consulta.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:60e273c2fbaac9e90c3bcc08c1a6e921a7464d29bf621567068e80fe2d70bc49 -->
+
+CMD distingue «deadline» de «aplazadas»: estas últimas conservan la protección de CPU al posponer hasta 50 ms el reintento de una timeline fría. Ningún aplazamiento genera una corrección, rechaza todo el intento ni se reutiliza como decisión completada. La cifra «fuera de presupuesto» mide por separado el tiempo real de la consulta.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 El protocolo actual sólo compara posición, velocidad, modo y algunos flags. El registro no convierte esa comparación parcial en una certificación completa del estado real. El contador del puente conserva su comportamiento anterior. CBF real, dual activo y física de objetos desconocidos siguen sin habilitarse. No se ha medido FPS ni fidelidad en GD real.
 

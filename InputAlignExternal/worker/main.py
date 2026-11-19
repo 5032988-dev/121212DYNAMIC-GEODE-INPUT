@@ -146,7 +146,7 @@ def serve(directory: Path, *, stop=None, sensor_settings=None, diagnostics=True)
                 if finished - stats_since >= 5:
                     measured = statistics.report(finished-stats_since)
                     print(f"Consultas {measured['queries']} | propuestas {measured['proposals']} | "
-                          f"deadline {measured['deadlines']} | fuera de presupuesto {measured['over_budget']} | media {measured['mean_ms']:.2f}ms | "
+                          f"deadline {measured['deadlines']} | aplazadas {measured['deferred']} | fuera de presupuesto {measured['over_budget']} | media {measured['mean_ms']:.2f}ms | "
                           f"max {measured['max_ms']:.2f}ms | CPU consultas {measured['cpu_percent']:.1f}%", flush=True)
                     statistics, stats_since = QueryStats(), finished
             if result:

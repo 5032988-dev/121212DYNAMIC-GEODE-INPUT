@@ -33,6 +33,7 @@
 
 namespace gd {
 struct DeadlineExceeded {};
+struct TimelineDeferred : DeadlineExceeded {};
 #ifndef _WIN32
 namespace platform_math { using std::sin; using std::cos; using std::pow; }
 #endif
@@ -375,7 +376,7 @@ struct Level {
         check_deadline();
         auto retry = timelineRetryAfter.find(speed_log);
         if (deadlineActive && retry != timelineRetryAfter.end() && std::chrono::steady_clock::now() < retry->second)
-            throw DeadlineExceeded{};
+            throw TimelineDeferred{};
         auto owned = std::make_unique<Timeline>();
         Timeline* tl = owned.get();
         tl->breaks = logs.materialize(speed_log);
