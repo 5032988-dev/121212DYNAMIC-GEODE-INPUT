@@ -10,6 +10,7 @@ from gdgen.sim.fast import FastSimulator, player_fields
 from gdgen.sim.collide import Simulator
 from gdgen.sim.level import build_level, dynamic_groups
 from gdgen.sim.triggers import TriggerEngine, parse_triggers
+from gdgen.levelstring import parse_level
 
 class ExpandedMechanicsTests(unittest.TestCase):
     def test_correction_in_every_vehicle_survives_full_horizon(self):
@@ -110,7 +111,15 @@ class ExpandedMechanicsTests(unittest.TestCase):
         ]
         for raw in cases:
             with self.subTest(level=raw):
-                native=load_simulator(raw); ref=Simulator(native.level)
+                # Keep the legacy Stop engine consistency check, but do not
+                # treat agreement of these two engines as gameplay fidelity.
+                if '1,1616,' in raw:
+                    with self.assertRaisesRegex(UnsupportedLevel, 'Stop'):
+                        load_simulator(raw)
+                    native=FastSimulator(build_level(*parse_level(raw),triggers=True))
+                else:
+                    native=load_simulator(raw)
+                ref=Simulator(native.level)
                 p,c=ref.initial_state(),native.initial_state()
                 for tick in range(250):
                     p=ref.step(p,False);c=native.step(c,False)

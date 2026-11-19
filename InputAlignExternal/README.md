@@ -6,7 +6,20 @@
 
 <!-- coderabbit-ai-generated-section:v1:d21b3b9c76524e802d3788d930e331e8781902c777d27f083147809e070f95d8 -->
 
-# Input Align External — alpha 0.2.0
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:fec6f16eace17dac917c40fecf016b823299e816221a232413d98c527586ce58 -->
+
+# Input Align External — alpha 0.3: reparación conservadora
+
+**Actualización de esta continuación:** Stop/Pause/Resume (objeto 1616) se rechaza antes de crear el modelo. El motor heredado selecciona movimientos por grupo de destino, mientras que el manual del editor selecciona los grupos asignados al trigger fuente. Esto retira explícitamente la compatibilidad Stop anunciada en las notas históricas siguientes. No se implementan ni aproximan Pause/Resume. También se suspende el intento si falla la reconstrucción de historial durante la agrupación UDP, conservando el worker para un nuevo intento.
+
+Referencia: [Manual del editor, sección Stop, página impresa 66](https://static.wikia.nocookie.net/geometry-dash/images/8/83/GDEditor-v2.2.pdf/revision/latest?cb=20231220033307). La prueba antigua de igualdad entre motores para Stop se conserva mediante acceso directo al motor; ya no representa autorización de esa mecánica en el predictor.
+
+El paquete conserva las DLL originales; los cambios funcionales están en main.py y predictor.py. No se ha probado en Geometry Dash ni medido FPS. No es una versión final.
+
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 <!-- /coderabbit-ai-generated:v1 -->
 

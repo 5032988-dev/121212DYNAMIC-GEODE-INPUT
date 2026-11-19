@@ -26,7 +26,13 @@ def newer_frame(predictor, frame, queued):
         known = predictor.tick if predictor.session == queued[0].session else 0
         if queued[0].tick - known > queued[3]:
             # Validate/replay retained history before the newer window discards it.
-            predictor.synchronize(*frame[:4])
+            try:
+                predictor.synchronize(*frame[:4])
+            except (ValueError, OverflowError, RuntimeError):
+                # Replay may have advanced only part of the retained history.
+                # Keep serving telemetry, but never forecast from that partial state.
+                # synchronize resets rejection when a new attempt arrives.
+                predictor.rejected = True
     return queued
 
 

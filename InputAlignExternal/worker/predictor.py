@@ -23,7 +23,7 @@ class UnsupportedLevel(ValueError):
 
 
 VISUAL_TRIGGER_IDS = frozenset({29, 30, 105, 899, 900, 915, 1006, 1007})
-SUPPORTED_TRIGGER_IDS = VISUAL_TRIGGER_IDS | {901, 1049, 1268, 1616}
+SUPPORTED_TRIGGER_IDS = VISUAL_TRIGGER_IDS | {901, 1049, 1268}
 MAX_INDEX_ENTRIES = 200000
 MAX_COORDINATE = 10_000_000
 
@@ -59,6 +59,11 @@ def load_simulator(text: str):
         info = table.get(ident)
         if info is None:
             raise UnsupportedLevel(f'Objeto desconocido {ident}: correccion suspendida')
+        if ident == 1616:
+            # GD Stop selects the source trigger's groups; the current engine
+            # incorrectly selects moved groups and also lacks Pause/Resume.
+            # Quarantine all variants until independently validated.
+            raise UnsupportedLevel('Stop/Pause/Resume sin modelo verificado: correccion suspendida')
         # Accept only triggers implemented by the external event engine.
         if ident in (DYNAMIC_TRIGGER_IDS - SUPPORTED_TRIGGER_IDS) or (info.category == 'trigger' and ident not in SUPPORTED_TRIGGER_IDS):
             raise UnsupportedLevel(f'Trigger dinamico {ident}: correccion suspendida')
