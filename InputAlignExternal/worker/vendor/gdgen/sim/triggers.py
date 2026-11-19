@@ -167,7 +167,13 @@ def parse_triggers(objects: list[dict[str, str]]) -> tuple[list[Trigger], dict[s
             approx["touch trigger (fires by x)"] = approx.get("touch trigger (fires by x)", 0) + 1
         if oid == MOVE:
             t.dx, t.dy = _f(o, "28"), _f(o, "29")
-            t.duration, t.easing, t.rate = _f(o, "10"), int(_f(o, "30")), _f(o, "85", 2.0)
+            t.duration = _f(o, "10")
+            # Native timelines store durations in signed 64-bit ticks. Leave headroom
+            # for rounding and reject rather than moving geometry with a bogus duration.
+            ticks = t.duration * TICKS_PER_SECOND
+            if not math.isfinite(ticks) or ticks < 0 or ticks >= 2**63:
+                raise ValueError("Move duration must fit nonnegative signed 64-bit ticks")
+            t.easing, t.rate = int(_f(o, "30")), _f(o, "85", 2.0)
             t.lock_x = o.get("58") == "1"
             t.mod_x = _f(o, "143", 1.0) or 1.0
             if o.get("59") == "1" or o.get("100") == "1":

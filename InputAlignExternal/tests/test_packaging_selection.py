@@ -52,7 +52,7 @@ class PackagingSelectionTests(unittest.TestCase):
             root=Path(directory); project=root/'project'; build=root/'build'
             vendor=project/'worker/vendor';vendor.mkdir(parents=True);build.mkdir()
             (vendor/'UPSTREAM.json').write_text(json.dumps({'files':[]}))
-            for name in ('README.md','LICENSE'):(project/name).write_bytes(b'fixture')
+            for name in ('README.md','GUIA-INSTALACION.md','IMPLEMENTATION-NOTES.md','LICENSE'):(project/name).write_bytes(b'fixture')
             (project/'worker/python.exe').write_bytes(b'bad overlay')
             (build/'mod.geode').write_bytes(b'mod');(build/'gdsim.dll').write_bytes(b'dll')
             runtime=root/'runtime.zip'
@@ -61,3 +61,31 @@ class PackagingSelectionTests(unittest.TestCase):
             with patch.object(module,'ROOT',project), patch.object(module,'PYTHON_RUNTIME_SHA256',hashlib.sha256(runtime.read_bytes()).hexdigest()):
                 with self.assertRaisesRegex(ValueError,'collides'):
                     module.package(build,runtime,root/'result.zip')
+
+    def test_build_checkout_preserves_worker_and_includes_referenced_guides(self):
+        import json
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / 'build' / 'project'
+            vendor = project / 'worker/vendor'
+            vendor.mkdir(parents=True)
+            (vendor / 'UPSTREAM.json').write_text(json.dumps({'files': []}))
+            for name in ('README.md', 'GUIA-INSTALACION.md', 'IMPLEMENTATION-NOTES.md', 'LICENSE'):
+                (project / name).write_text(name)
+            (project / 'worker/main.py').write_text('worker')
+            (project / 'worker/build').mkdir()
+            (project / 'worker/build/scratch.txt').write_text('exclude')
+            build = project / 'artifacts'
+            build.mkdir()
+            (build / 'mod.geode').write_bytes(b'mod')
+            (build / 'gdsim.dll').write_bytes(b'dll')
+            runtime = project / 'runtime.zip'
+            with zipfile.ZipFile(runtime, 'w') as z:
+                for name in ('python.exe', 'python312.dll', 'python312.zip'): z.writestr(name, b'fixture')
+            output = project / 'result.zip'
+            with patch.object(module, 'ROOT', project), patch.object(module, 'PYTHON_RUNTIME_SHA256', hashlib.sha256(runtime.read_bytes()).hexdigest()):
+                module.package(build, runtime, output)
+            with zipfile.ZipFile(output) as z:
+                self.assertEqual(z.read('InputAlignWorker/main.py'), b'worker')
+                for name in ('GUIA-INSTALACION.md', 'IMPLEMENTATION-NOTES.md'):
+                    self.assertEqual(z.read(name), name.encode())
+                self.assertNotIn('InputAlignWorker/build/scratch.txt', z.namelist())

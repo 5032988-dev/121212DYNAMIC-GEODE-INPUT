@@ -156,3 +156,19 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual(worker_main.main(), 0)
         self.assertEqual(events[0], ('enter', worker_main.bundle, 'off'))
         self.assertEqual(events[1:], ['serve','restore'])
+
+class ConsoleEventTests(unittest.TestCase):
+    def test_break_and_termination_events_restore_affinity(self):
+        import ctypes
+        from unittest.mock import Mock, patch
+        from cpu_isolation import WindowsCPU
+        api = object.__new__(WindowsCPU)
+        api.k = Mock()
+        cleanup = Mock()
+        with patch.object(ctypes, 'WINFUNCTYPE', create=True, return_value=lambda f: f):
+            api.on_close(cleanup)
+        for event in (1, 2, 5, 6):
+            self.assertFalse(api.handler(event))
+        self.assertEqual(cleanup.call_count, 4)
+        self.assertFalse(api.handler(0))
+        self.assertEqual(cleanup.call_count, 4)  # Ctrl+C retains Python's normal handling.

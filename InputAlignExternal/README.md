@@ -207,7 +207,13 @@ Dual activo, dos jugadores, platformer, start positions activos, checkpoints car
 
 <!-- coderabbit-ai-generated-section:v1:0b743438ef04fa98032f249747546bfb1d7db40a07fcf9836af4398b46b91a6a -->
 
-Se admiten los triggers visuales enumerados y Move/Toggle/Spawn/Stop con parametros representables. Touch triggers, Move lock-Y/to-target, Rotate, Follow, Scale, area y keyframes siguen sin implementacion fiel. Un objeto desconocido rechaza la prediccion del nivel completo; los movimientos y clics del juego permanecen directos. Una rama futura no representable no deja bloqueado el intento real. Si esa mecanica afecta el estado real, el modelo deja de corregir hasta reiniciar.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:08f56455aa8498193e2b3257d6856538e34933be49a89158db6ad81ca3b47543 -->
+
+Se admiten los triggers visuales enumerados y Move/Toggle/Spawn con parametros representables.
+
+<!-- /coderabbit-ai-generated:v1 --> Touch triggers, Move lock-Y/to-target, Rotate, Follow, Scale, area y keyframes siguen sin implementacion fiel. Un objeto desconocido rechaza la prediccion del nivel completo; los movimientos y clics del juego permanecen directos. Una rama futura no representable no deja bloqueado el intento real. Si esa mecanica afecta el estado real, el modelo deja de corregir hasta reiniciar.
 
 <!-- /coderabbit-ai-generated:v1 --> El cargador limita posiciones y bordes a 10000000 unidades, el nivel a 250000 objetos y el indice a 200000 entradas de buckets; rechaza geometria no finita antes de reservar ese indice.
 

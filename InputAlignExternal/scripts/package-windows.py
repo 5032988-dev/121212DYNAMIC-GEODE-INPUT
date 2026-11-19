@@ -40,6 +40,8 @@ def package(build: Path, runtime: Path, output: Path, *, native: Path | None = N
     if len(mod) != 1 or native is None:
         raise ValueError('Expected one .geode package and gdsim.dll in the build directory')
     members = {mod[0].name: mod[0].read_bytes(), 'README.md': (ROOT / 'README.md').read_bytes(),
+               'GUIA-INSTALACION.md': (ROOT / 'GUIA-INSTALACION.md').read_bytes(),
+               'IMPLEMENTATION-NOTES.md': (ROOT / 'IMPLEMENTATION-NOTES.md').read_bytes(),
                'LICENSE-InputAlignExternal.txt': (ROOT / 'LICENSE').read_bytes(),
                'InputAlignWorker/gdsim.dll': native.read_bytes()}
     if hashlib.sha256(runtime.read_bytes()).hexdigest() != PYTHON_RUNTIME_SHA256:
@@ -61,9 +63,10 @@ def package(build: Path, runtime: Path, output: Path, *, native: Path | None = N
             members['InputAlignWorker/' + info.filename] = source.read(info)
     members['InputAlignWorker/python312._pth'] = b'python312.zip\n.\nvendor\n'
     for path in sorted((ROOT / 'worker').rglob('*')):
-        if (not path.is_file() or '__pycache__' in path.parts or 'build' in path.parts
+        relative = path.relative_to(ROOT / 'worker')
+        if (not path.is_file() or '__pycache__' in relative.parts or 'build' in relative.parts
                 or path.suffix in {'.so', '.dll', '.pyc'}): continue
-        name = 'InputAlignWorker/' + path.relative_to(ROOT / 'worker').as_posix()
+        name = 'InputAlignWorker/' + relative.as_posix()
         if name.casefold() in {key.casefold() for key in members}:
             raise ValueError('Worker file collides with staged runtime: ' + name)
         members[name] = path.read_bytes()

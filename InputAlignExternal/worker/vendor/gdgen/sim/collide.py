@@ -781,13 +781,13 @@ class Simulator:
                         p.y_vel = 0.0
                     else:
                         hit_ground(p)
-                    (c.feet if s > 0 else c.head)(o.y1, o.index)
+                    c.feet(o.y1, o.index)
                 return
             # B: the object is above the player's world-top (ceiling; landing when upside-down).
             if p.upside_down or (flyish and not passable):
                 cmp, cmp_prev = (head, head_prev) if s > 0 else (feet, feet_prev)
                 deep = o.y0 < cmp and o.y0 < cmp_prev
-                prev_uid = p.prev_top_uid if s > 0 else p.prev_bottom_uid
+                prev_uid = p.prev_top_uid
                 if not deep or o.index == prev_uid:
                     if p.y_vel >= 0:
                         p.y = o.y0 - h / 2
@@ -796,7 +796,7 @@ class Simulator:
                         else:
                             hit_ground(p)
                         if not ((passable or o.type == "Breakable") and flag71 and s > 0):
-                            (c.head if s > 0 else c.feet)(o.y0, o.index)
+                            c.head(o.y0, o.index)
                     return
 
         # C: death check with the 0.3-scale inner box (§7C); passable blocks never kill (§15.3).

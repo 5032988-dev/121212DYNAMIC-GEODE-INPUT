@@ -61,7 +61,7 @@ class FrameBatchTests(unittest.TestCase):
         state = p.state
         for _ in range(4 + values[10]): state = sim.step(state,False)
         for _ in range(80):
-            state = sim.step(state,True)
+            state = sim.step(state,bool(values[11]))
             self.assertFalse(sim.view(state)['dead'])
 
     def test_missing_history_is_not_guessed(self):

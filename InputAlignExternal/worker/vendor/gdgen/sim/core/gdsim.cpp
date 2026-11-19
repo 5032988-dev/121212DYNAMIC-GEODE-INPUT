@@ -1483,21 +1483,21 @@ struct Simulator {
                     p.y = o.y1 + h / 2;
                     if (flag71) p.y_vel = 0.0;
                     else hit_ground(p);
-                    if (s > 0) c.feet(o.y1, o.index); else c.head(o.y1, o.index);
+                    c.feet(o.y1, o.index);
                 }
                 return;
             }
             if (p.upside_down || (flyish && !passable)) {
                 double cmp = s > 0 ? head : feet, cmp_prev = s > 0 ? head_prev : feet_prev;
                 bool deep = o.y0 < cmp && o.y0 < cmp_prev;
-                int prev_uid = s > 0 ? p.prev_top_uid : p.prev_bottom_uid;
+                int prev_uid = p.prev_top_uid;
                 if (!deep || o.index == prev_uid) {
                     if (p.y_vel >= 0) {
                         p.y = o.y0 - h / 2;
                         if (flag71) p.y_vel = 0.0;
                         else hit_ground(p);
                         if (!((passable || o.type == T_BREAKABLE) && flag71 && s > 0)) {
-                            if (s > 0) c.head(o.y0, o.index); else c.feet(o.y0, o.index);
+                            c.head(o.y0, o.index);
                         }
                     }
                     return;
@@ -1679,6 +1679,21 @@ SearchResult find_path(Level& L, double goal_x, int max_ticks, int input_period,
                        bool use_bucket) {
     Simulator sim(L);
     auto t0 = std::chrono::steady_clock::now();
+    struct DeadlineScope {
+        Level& level;
+        bool active;
+        std::chrono::steady_clock::time_point previous;
+        ~DeadlineScope() { level.deadlineActive = active; level.deadline = previous; }
+    } scope{L, L.deadlineActive, L.deadline};
+    if (time_limit > 0) {
+        auto remaining = std::chrono::steady_clock::time_point::max() - t0;
+        auto limit = time_limit < std::chrono::duration<double>(remaining).count()
+            ? t0 + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::duration<double>(time_limit))
+            : std::chrono::steady_clock::time_point::max();
+        L.deadline = L.deadlineActive ? std::min(L.deadline, limit) : limit;
+        L.deadlineActive = true;
+    }
     Player init = sim.initial_state();
     std::vector<Node> frontier{{init, -1, make_key(init)}};
     std::vector<std::pair<int, bool>> history;
@@ -1691,46 +1706,51 @@ SearchResult find_path(Level& L, double goal_x, int max_ticks, int input_period,
         std::reverse(out.begin(), out.end());
         return out;
     };
-    for (int tick = 0; tick < max_ticks; ++tick) {
-        bool branch = tick % input_period == 0;
-        std::vector<Node> next;
-        next.reserve(frontier.size() * 2);
-        std::unordered_map<Key, size_t, KeyHash> seen;
-        seen.reserve(frontier.size() * 4);
-        for (const Node& n : frontier) {
-            bool opts[2] = {false, true};
-            int nopt = 2;
-            if (!branch) { opts[0] = n.node >= 0 ? history[n.node].second : false; nopt = 1; }
-            for (int oi = 0; oi < nopt; ++oi) {
-                bool hold = opts[oi];
-                Player nxt = sim.step(n.st, hold);
-                if (nxt.dead) continue;
-                Key k = make_key(nxt);
-                if (seen.count(k)) continue;
-                history.push_back({n.node, hold});
-                seen.emplace(k, next.size());
-                next.push_back({std::move(nxt), (int)history.size() - 1, std::move(k)});
+    try {
+        for (int tick = 0; tick < max_ticks; ++tick) {
+            bool branch = tick % input_period == 0;
+            std::vector<Node> next;
+            next.reserve(frontier.size() * 2);
+            std::unordered_map<Key, size_t, KeyHash> seen;
+            seen.reserve(frontier.size() * 4);
+            for (const Node& n : frontier) {
+                bool opts[2] = {false, true};
+                int nopt = 2;
+                if (!branch) { opts[0] = n.node >= 0 ? history[n.node].second : false; nopt = 1; }
+                for (int oi = 0; oi < nopt; ++oi) {
+                    bool hold = opts[oi];
+                    Player nxt = sim.step(n.st, hold);
+                    if (nxt.dead) continue;
+                    Key k = make_key(nxt);
+                    if (seen.count(k)) continue;
+                    history.push_back({n.node, hold});
+                    seen.emplace(k, next.size());
+                    next.push_back({std::move(nxt), (int)history.size() - 1, std::move(k)});
+                }
             }
+            if (next.empty()) break;
+            frontier.swap(next);
+            if ((int)frontier.size() > max_frontier) frontier = prune(frontier, (size_t)max_frontier, use_bucket);
+            peak = std::max(peak, (int)frontier.size());
+            size_t lead = 0;
+            for (size_t i = 1; i < frontier.size(); ++i)
+                if (frontier[i].st.x > frontier[lead].st.x) lead = i;
+            if (frontier[lead].st.x > best_x) { best_x = frontier[lead].st.x; best_node = frontier[lead].node; }
+            if (best_x >= goal_x) {
+                res.passed = true;
+                res.max_x = best_x;
+                res.ticks = tick + 1;
+                res.inputs = inputs_of(best_node);
+                res.frontier_peak = peak;
+                return res;
+            }
+            if (time_limit > 0 && tick % 64 == 0 &&
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() > time_limit)
+                break;
         }
-        if (next.empty()) break;
-        frontier.swap(next);
-        if ((int)frontier.size() > max_frontier) frontier = prune(frontier, (size_t)max_frontier, use_bucket);
-        peak = std::max(peak, (int)frontier.size());
-        size_t lead = 0;
-        for (size_t i = 1; i < frontier.size(); ++i)
-            if (frontier[i].st.x > frontier[lead].st.x) lead = i;
-        if (frontier[lead].st.x > best_x) { best_x = frontier[lead].st.x; best_node = frontier[lead].node; }
-        if (best_x >= goal_x) {
-            res.passed = true;
-            res.max_x = best_x;
-            res.ticks = tick + 1;
-            res.inputs = inputs_of(best_node);
-            res.frontier_peak = peak;
-            return res;
-        }
-        if (time_limit > 0 && tick % 64 == 0 &&
-            std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() > time_limit)
-            break;
+    } catch (DeadlineExceeded const&) {
+        if (!(time_limit > 0)) throw;
+        // Keep only the best fully completed frontier; a cancelled step is discarded.
     }
     res.passed = false;
     res.max_x = best_x;
@@ -1881,6 +1901,10 @@ int gd_state_list(void* lvl, void* st, int kind, void* buffer, int capacity) {
 
 int gd_find_path(void* lvl, double goal_x, int max_ticks, int input_period, int max_frontier, double time_limit,
                  int use_bucket, SearchOut* out, uint8_t* inputs, int inputs_cap) {
+    if (input_period <= 0 || max_frontier <= 0) {
+        if (out) *out = SearchOut{};
+        return -1;
+    }
     SearchResult r = find_path(*(Level*)lvl, goal_x, max_ticks, input_period, max_frontier, time_limit, use_bucket != 0);
     out->passed = r.passed;
     out->ticks = r.ticks;

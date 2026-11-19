@@ -57,5 +57,24 @@ int main() {
     dense.finish_engine();
     CHECK(dense.timeline(log)->moves.at(5).size()==10000);
     CHECK(dense.timeline(log)->moves.at(5).back().stop==60);
+    // Contacts and prior-contact IDs refer to world sides, independent of gravity.
+    Obj block{}; block.index = 42; block.y0 = 150; block.y1 = 180;
+    for (bool inverted : {false, true}) {
+        for (bool top : {false, true}) {
+            auto ship = sim.initial_state(); ship.mode = SHIP; ship.upside_down = inverted;
+            ship.y = ship.prev_y = top ? block.y0 - ship.width()/2 : block.y1 + ship.width()/2;
+            ship.y_vel = top ? 1 : -1;
+            StepContacts contact;
+            sim.collide_solid(ship, block, contact);
+            CHECK((top ? contact.top_uid : contact.bottom_uid) == 42);
+            CHECK((top ? contact.bottom_uid : contact.top_uid) == -1);
+        }
+    }
+    // A previous world-top contact keeps an inverted ship attached even in deep overlap.
+    auto ship = sim.initial_state(); ship.mode = SHIP; ship.upside_down = true;
+    ship.y = ship.prev_y = block.y0; ship.y_vel = 1; ship.prev_top_uid = 42;
+    StepContacts contact;
+    sim.collide_solid(ship, block, contact);
+    CHECK(contact.top_uid == 42 && !ship.dead);
     return 0;
 }

@@ -20,6 +20,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 
@@ -108,10 +109,15 @@ def _compile() -> Path:
     if not cxx:
         raise RuntimeError("no C++ compiler found for the simulator core (set CXX)")
     build.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_name(f"{out.name}.{os.getpid()}.tmp")
-    subprocess.run([cxx, "-O2", "-std=c++17", "-shared", "-fPIC", "-ffp-contract=off", "-fno-fast-math",
-                    "-o", str(tmp), str(SOURCE)], check=True)
-    os.replace(tmp, out)
+    fd, name = tempfile.mkstemp(prefix=out.name + ".", suffix=".tmp", dir=build)
+    os.close(fd)
+    tmp = Path(name)
+    try:
+        subprocess.run([cxx, "-O2", "-std=c++17", "-shared", "-fPIC", "-ffp-contract=off", "-fno-fast-math",
+                        "-o", str(tmp), str(SOURCE)], check=True)
+        os.replace(tmp, out)
+    finally:
+        tmp.unlink(missing_ok=True)
     return out
 
 
@@ -220,6 +226,11 @@ class FastState:
 
 
 class FastSimulator:
+    """Thread-confined simulator: use and destroy each instance and all its FastStates
+    on one owning thread. Never share an instance's native Level/handles with another
+    thread, including initial_state, step, find_path, view, unsupported or finalizers.
+    Separate instances may be used concurrently; CDLL calls release the GIL.
+    """
     def __init__(self, level: Level):
         self.level = level
         self._lib = lib = library()
@@ -284,6 +295,10 @@ class FastSimulator:
     def find_path(self, goal_x: float | None = None, max_ticks: int | None = None, input_period: int = 1,
                   max_frontier: int = 256, time_limit: float | None = None, bucket: bool = True) -> SearchResult:
         """search.find_path over this level, entirely in C++ (bucket: Simulator.bucket frontier pruning)."""
+        if input_period <= 0:
+            raise ValueError("input_period must be positive")
+        if max_frontier <= 0:
+            raise ValueError("max_frontier must be positive")
         goal = self.level.length if goal_x is None else goal_x
         ticks = int(goal / (0.7 * 5.98 * 0.25)) + 240 if max_ticks is None else max_ticks
         out = SearchOut()

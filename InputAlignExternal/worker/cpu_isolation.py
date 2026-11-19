@@ -179,7 +179,7 @@ class WindowsCPU:
 
     def on_close(self, cleanup) -> None:
         def handler(event):
-            if event in (2, 5, 6):
+            if event in (1, 2, 5, 6):
                 cleanup()
             return False
         self.handler = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_uint)(handler)

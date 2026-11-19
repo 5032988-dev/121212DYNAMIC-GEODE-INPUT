@@ -123,9 +123,12 @@ class Level:
 
 def _float(obj: dict, key: str, default: float = 0.0) -> float:
     try:
-        return float(obj.get(key, default))
+        value = float(obj.get(key, default))
     except ValueError:
         return default
+    if not math.isfinite(value):
+        raise ValueError(f"Non-finite object property {key}")
+    return value
 
 
 def _rotated_corners(cx: float, cy: float, w: float, h: float, degrees: float) -> tuple:

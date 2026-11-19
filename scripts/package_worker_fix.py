@@ -6,6 +6,8 @@ import argparse
 import hashlib
 import io
 import json
+import os
+import tempfile
 from pathlib import Path
 import zipfile
 
@@ -72,13 +74,20 @@ def package(output):
     }
     files['build-provenance.json'] = (json.dumps(provenance, indent=2) + '\n').encode()
     output.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as dest:
-        for name, data in files.items():
-            dest.writestr(name, data)
-    with zipfile.ZipFile(output) as result:
-        require(result.testzip() is None, 'Invalid output ZIP CRC')
-        for name, expected in provenance['sha256'].items():
-            require(sha(result.read(name)) == expected, f'Output hash mismatch: {name}')
+    fd, name = tempfile.mkstemp(prefix=output.name + '.', suffix='.tmp', dir=output.parent)
+    os.close(fd)
+    temporary = Path(name)
+    try:
+        with zipfile.ZipFile(temporary, 'w', compression=zipfile.ZIP_DEFLATED) as dest:
+            for name, data in files.items():
+                dest.writestr(name, data)
+        with zipfile.ZipFile(temporary) as result:
+            require(result.testzip() is None, 'Invalid output ZIP CRC')
+            for name, expected in provenance['sha256'].items():
+                require(sha(result.read(name)) == expected, f'Output hash mismatch: {name}')
+        os.replace(temporary, output)
+    finally:
+        temporary.unlink(missing_ok=True)
     print(f'Validated {len(files)} entries; replaced {list(replacements)} and build-provenance.json')
     print(f'SHA256 {sha(output.read_bytes())}')
 
