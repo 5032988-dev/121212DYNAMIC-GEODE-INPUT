@@ -40,6 +40,26 @@ def newer_frame(predictor, frame, queued):
     return queued
 
 
+
+def coalesce_frames(predictor, frames):
+    """Replay retained prefixes in tick order, including reordered UDP packets.
+
+    Work stays bounded to the existing 1+64 receive window. Every prefix still
+    passes Predictor.synchronize; a missing interval or divergence fails closed.
+    """
+    if not 1 <= len(frames) <= 65:
+        raise ValueError('Lote de telemetria fuera de limites')
+    if len(frames) == 1:
+        return frames[0]
+    session = max(frame[0].session for frame in frames)
+    ordered = sorted((frame for frame in frames if frame[0].session == session),
+                     key=lambda frame: (frame[0].tick, frame[0].epoch))
+    latest = ordered[0]
+    for queued in ordered[1:]:
+        latest = newer_frame(predictor, latest, queued)
+    return latest
+
+
 def serve(directory: Path, *, stop=None, sensor_settings=None):
     config = json.loads((directory / 'bridge.json').read_text(encoding='utf-8'))
     if config.get('version') != 1 or not 1 <= config['port'] <= 65535:
@@ -90,18 +110,20 @@ def serve(directory: Path, *, stop=None, sensor_settings=None):
                         failure = str(error)
                 print('Intento', header.session, failure or 'simulador preparado', flush=True)
             # Coalesce queued telemetry before spending CPU on a forecast. History reconstructs skipped ticks.
+            frames = [frame]
             sock.setblocking(False)
             try:
                 for _ in range(64):
                     try:
                         queued = decode_frame(sock.recv(2048), token)
-                        frame = newer_frame(predictor, frame, queued)
+                        frames.append(queued)
                     except (ValueError, OverflowError):
                         continue
                     except BlockingIOError:
                         break
             finally:
                 sock.settimeout(.05)
+            frame = coalesce_frames(predictor, frames)
             header = frame[0]
             result = None
             message = failure

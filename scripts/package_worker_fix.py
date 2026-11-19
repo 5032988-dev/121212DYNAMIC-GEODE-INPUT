@@ -53,7 +53,7 @@ def package(output):
         provenance['sha256'][name] = sha(files[name])
     provenance['workerPatch'] = {
         'generatedBy': 'CodeRabbit Coding Agent',
-        'id': 'obstacle-distance-sensor-5',
+        'id': 'ordered-history-recovery-6',
         'originalArchiveSha256': sha(original.read_bytes()),
         'originalFileSha256': before,
         'changes': ['Reject the attempt after initialization or replay errors; keep the worker running.',
@@ -61,7 +61,8 @@ def package(output):
                     'Reuse one exact successful prediction after fresh state validation; retry incomplete searches.',
                     'Reject Stop/Pause/Resume levels before constructing an unverified model.',
                     'Optionally reserve one physical CPU core for the worker, verify masks and restore on normal exit; GPU unchanged.',
-                    'Report nearby modeled hitboxes; optionally suppress out-of-range searches without reducing verification horizon.'],
+                    'Report nearby modeled hitboxes; optionally suppress out-of-range searches without reducing verification horizon.',
+                    'Order bounded telemetry batches before replay; recover observed history from reordered UDP packets.'],
         'nativeBinariesRebuilt': False,
         'validation': 'Python regression tests on Linux; Windows and gameplay not tested.',
         'sourceArchive': 'InputAlignExternal-v0.3-source.zip',
