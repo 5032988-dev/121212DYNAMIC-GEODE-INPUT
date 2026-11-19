@@ -234,6 +234,48 @@ class IntegrationTests(unittest.TestCase):
             finally:
                 process.terminate(); process.communicate(timeout=5)
 
+    def test_new_attempt_gets_immediate_status_even_when_message_is_unchanged(self):
+        # GD clears prediction readiness at every restart and accepts status only
+        # from the current session. An unchanged message must not delay readiness.
+        with tempfile.TemporaryDirectory() as tmp, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as game:
+            game.bind(('127.0.0.1', 0)); game.settimeout(5)
+            directory = Path(tmp)
+            (directory / 'bridge.json').write_text(json.dumps({'version': 1, 'port': game.getsockname()[1],
+                                                              'tokenHi': '11', 'tokenLo': '22'}))
+            (directory / 'level.txt').write_text('kA2,0;')
+            process = subprocess.Popen([sys.executable, str(ROOT / 'worker/main.py'), '--bridge', tmp],
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                hello, endpoint = game.recvfrom(2048)
+                self.assertEqual(HEADER.unpack(hello)[1], HELLO)
+                sim = load_simulator('kA2,0;')
+                initial = state_tuple(sim.view(sim.initial_state()))
+                def send_frame(session):
+                    game.sendto(frame_packet(Header(FRAME, 0x11, 0x22, session), initial), endpoint)
+                def receive_status(session, timeout):
+                    deadline = time.monotonic() + timeout
+                    while time.monotonic() < deadline:
+                        game.settimeout(deadline - time.monotonic())
+                        try: data, _ = game.recvfrom(2048)
+                        except socket.timeout: return None
+                        header = HEADER.unpack_from(data)
+                        if header[1] == STATUS and header[4] == session:
+                            return STATUS_BODY.unpack_from(data, HEADER.size)
+                    return None
+                send_frame(1)
+                first = receive_status(1, 5)
+                self.assertIsNotNone(first)
+                self.assertEqual(first[0], 0)
+                send_frame(1)
+                self.assertIsNone(receive_status(1, .12), 'same session should remain throttled')
+                send_frame(2)
+                second = receive_status(2, .5)
+                self.assertIsNotNone(second, 'restart needs a fresh ready status without waiting for periodic telemetry')
+                self.assertEqual(second, first)
+                self.assertIsNone(process.poll())
+            finally:
+                process.terminate(); process.communicate(timeout=5)
+
     def test_original_settings_preserved(self):
         original = ROOT.parent / 'InputAlign-v2.7.1-alpha.1-400ticks-windows.geode'
         if not original.is_file(): self.skipTest('Original package not present in source-only distribution')

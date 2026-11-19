@@ -67,7 +67,17 @@ Esto separa dónde pueden ejecutarse GD y el worker; otros procesos de Windows a
 
 <!-- coderabbit-ai-generated-section:v1:83fb01bd78a5c8899ee7fce7fb7f055930e3e3d38ca41d0ed7aa5efcd23cb6b3 -->
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:641bdf58e2d72120a1ab735a0f98991de10eff976ce6b7407598bd9eef88dde0 -->
+
+## Confirmación de cada intento
+
+El worker comunica el estado para cada nuevo intento inmediatamente después de validarlo, incluso si el mensaje es idéntico al anterior. Esto evita esperar al intervalo periódico para recuperar la disponibilidad de predicción tras reiniciar. Los mensajes del mismo intento conservan su límite habitual; las validaciones y el protocolo siguen iguales. La guía paso a paso del paquete está en `GUIA-INSTALACION.md`.
+
 ## Recuperación de historial con paquetes UDP desordenados
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 Antes de descartar paquetes, el worker reúne como máximo los mismos 65 paquetes de recepción y ordena los del intento más reciente por tick y época de entrada. Los prefijos observados se reconstruyen con la validación física existente. Esto permite aprovechar un paquete anterior que haya llegado después de otro más reciente; no espera paquetes futuros ni inventa entradas perdidas. El protocolo mantiene sus 64 ticks de historial por paquete y el horizonte permanece intacto.
 

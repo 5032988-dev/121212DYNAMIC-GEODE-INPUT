@@ -70,7 +70,7 @@ def serve(directory: Path, *, stop=None, sensor_settings=None):
     failure = None
     last_hello = last_status = 0.
     last_session = None
-    last_message = last_display = None
+    last_message = last_display = last_status_session = None
     print('Input Align External | GD 2.2081 | No cierres esta ventana.', flush=True)
     print('Reinicia el intento si el nivel ya estaba en marcha.', flush=True)
     # Keep the game responsive under contention. This changes only this worker's priority.
@@ -137,7 +137,7 @@ def serve(directory: Path, *, stop=None, sensor_settings=None):
                     query_error = True
             if result:
                 sock.send(result)
-            if message != last_message or now - last_status >= 1:
+            if header.session != last_status_session or message != last_message or now - last_status >= 1:
                 display_message = message or 'Esperando'
                 if predictor and not query_error and not predictor.rejected and predictor.last_obstacle is not None:
                     display_message += ' | ' + predictor.last_obstacle.label()
@@ -147,6 +147,7 @@ def serve(directory: Path, *, stop=None, sensor_settings=None):
                 sock.send(status(header, 1 if failure or query_error or predictor and predictor.rejected else 0, display_message))
                 last_status = now
                 last_message = message
+                last_status_session = header.session
 
 
 def main():
