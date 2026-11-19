@@ -2,22 +2,20 @@
 #pragma once
 #include <array>
 namespace iax {
-// Seven separate futures, advanced one tick at a time on the worker thread.
+// Seven separate futures on the worker thread, evaluated in ascending delay order.
+// Complete the entire horizon before certifying a candidate; later candidates
+// cannot improve an already verified earlier delay and need no simulation.
 // step: positive=live, zero=dead, negative=unmodelled. Exceptions abort the query.
 template<class State, class Step>
 int evaluateCandidates(std::array<State,7>& states, int count, int horizon, Step step) {
     if (count < 1 || count > 7 || horizon < 1) return -1;
-    std::array<bool,7> live{};
-    for (int i=0;i<count;++i) live[i]=true;
-    for (int tick=0;tick<horizon;++tick) {
-        bool any=false;
-        for (int i=0;i<count;++i) if (live[i]) {
-            live[i]=step(states[i],i,tick)>0;
-            any=any || live[i];
+    for (int i=0;i<count;++i) {
+        bool live=true;
+        for (int tick=0;tick<horizon;++tick) {
+            if (step(states[i],i,tick)<=0) { live=false; break; }
         }
-        if (!any) return -1;
+        if (live) return i;
     }
-    for (int i=0;i<count;++i) if (live[i]) return i;
     return -1;
 }
 }
