@@ -16,6 +16,7 @@ if native.is_file():
     os.environ['GDGEN_SIM_LIB'] = str(native)
 
 from cpu_isolation import isolation
+from obstacles import read_settings as read_sensor_settings
 from protocol import Header, HELLO, decode_frame, status
 from predictor import Predictor, UnsupportedLevel, load_simulator
 
@@ -39,7 +40,7 @@ def newer_frame(predictor, frame, queued):
     return queued
 
 
-def serve(directory: Path, *, stop=None):
+def serve(directory: Path, *, stop=None, sensor_settings=None):
     config = json.loads((directory / 'bridge.json').read_text(encoding='utf-8'))
     if config.get('version') != 1 or not 1 <= config['port'] <= 65535:
         raise ValueError('Configuracion de puente invalida')
@@ -49,7 +50,7 @@ def serve(directory: Path, *, stop=None):
     failure = None
     last_hello = last_status = 0.
     last_session = None
-    last_message = None
+    last_message = last_display = None
     print('Input Align External | GD 2.2081 | No cierres esta ventana.', flush=True)
     print('Reinicia el intento si el nivel ya estaba en marcha.', flush=True)
     # Keep the game responsive under contention. This changes only this worker's priority.
@@ -84,7 +85,7 @@ def serve(directory: Path, *, stop=None):
                         path = directory / 'level.txt'
                         if path.stat().st_size > 32 * 1024 * 1024:
                             raise UnsupportedLevel('Nivel demasiado grande')
-                        predictor = Predictor(load_simulator(path.read_text(encoding='utf-8')))
+                        predictor = Predictor(load_simulator(path.read_text(encoding='utf-8')), sensor_settings=sensor_settings)
                     except (ValueError, OSError, RuntimeError, OverflowError, AttributeError) as error:
                         failure = str(error)
                 print('Intento', header.session, failure or 'simulador preparado', flush=True)
@@ -115,7 +116,13 @@ def serve(directory: Path, *, stop=None):
             if result:
                 sock.send(result)
             if message != last_message or now - last_status >= 1:
-                sock.send(status(header, 1 if failure or query_error or predictor and predictor.rejected else 0, message or 'Esperando'))
+                display_message = message or 'Esperando'
+                if predictor and not query_error and not predictor.rejected and predictor.last_obstacle is not None:
+                    display_message += ' | ' + predictor.last_obstacle.label()
+                if display_message != last_display:
+                    print(display_message, flush=True)
+                    last_display = display_message
+                sock.send(status(header, 1 if failure or query_error or predictor and predictor.rejected else 0, display_message))
                 last_status = now
                 last_message = message
 
@@ -125,12 +132,19 @@ def main():
     parser.add_argument('--bridge', type=Path, required=True, help='Carpeta de datos del mod')
     parser.add_argument('--cpu-isolation', choices=('auto', 'off'), default=None,
                         help='Sobrescribe cpu-isolation.json: auto separa CPU; off conserva la afinidad')
+    parser.add_argument('--obstacle-distance', type=float, default=None,
+                        help='Distancia horizontal del sensor, 0..12000 unidades GD; no cambia el horizonte')
     args = parser.parse_args()
     try:
         if not os.environ.get('GDGEN_SIM_LIB'):
             raise RuntimeError('Falta gdsim.dll. Copia el contenido completo de InputAlignWorker o compila con CMake.')
+        try:
+            sensor_settings = read_sensor_settings(bundle, args.obstacle_distance)
+        except (ValueError, OSError) as error:
+            sensor_settings = None
+            print(f'Sensor desactivado por configuracion invalida: {error}', file=sys.stderr, flush=True)
         with isolation(bundle, args.cpu_isolation):
-            serve(args.bridge.resolve())
+            serve(args.bridge.resolve(), sensor_settings=sensor_settings)
     except (OSError, ValueError, RuntimeError) as error:
         print(f'No se pudo iniciar: {error}', file=sys.stderr, flush=True)
         return 1

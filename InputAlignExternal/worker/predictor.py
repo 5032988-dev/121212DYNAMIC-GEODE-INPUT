@@ -15,6 +15,7 @@ from gdgen.levelstring import parse_level
 from gdgen.objects import load_objects
 from gdgen.sim.fast import FastSimulator
 from gdgen.sim.level import build_level, make_phys_object, COLLIDABLE, DYNAMIC_TRIGGER_IDS, BUCKET
+from obstacles import ObstacleSensor
 from protocol import HELD, VALID, HEADER, DECISION, DECISION_BODY, matches, state_tuple, decision
 
 
@@ -109,7 +110,9 @@ def load_simulator(text: str):
 
 
 class Predictor:
-    def __init__(self, sim):
+    def __init__(self, sim, *, sensor_settings=None):
+        self.obstacle_sensor = ObstacleSensor(sim.level, **sensor_settings) if sensor_settings is not None else None
+        self.last_obstacle = None
         self.sim = sim
         self.state = sim.initial_state()
         self.tick = 0
@@ -168,7 +171,12 @@ class Predictor:
         return view
 
     def forecast(self, header, actual, history, count, horizon, budget, options, *, clock=time.perf_counter):
+        self.last_obstacle = None
         view = self.synchronize(header, actual, history, count)
+        if self.obstacle_sensor is not None:
+            self.last_obstacle = self.obstacle_sensor.query(view['x'])
+            if not self.obstacle_sensor.should_search(self.last_obstacle):
+                return None
         if not actual[4] & VALID or not horizon:
             return None
         if self.native and clock is time.perf_counter:

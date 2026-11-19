@@ -146,7 +146,7 @@ class LauncherTests(unittest.TestCase):
                 yield
             finally:
                 events.append('restore')
-        def fail_serve(directory):
+        def fail_serve(directory, **kwargs):
             events.append('serve')
             raise KeyboardInterrupt
         with patch.object(sys, 'argv', ['main.py','--bridge','.','--cpu-isolation','off']), \

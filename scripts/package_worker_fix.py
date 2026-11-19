@@ -43,6 +43,8 @@ def package(output):
         'InputAlignWorker/predictor.py': ROOT / 'InputAlignExternal/worker/predictor.py',
         'InputAlignWorker/cpu_isolation.py': ROOT / 'InputAlignExternal/worker/cpu_isolation.py',
         'InputAlignWorker/cpu-isolation.json': ROOT / 'InputAlignExternal/worker/cpu-isolation.json',
+        'InputAlignWorker/obstacles.py': ROOT / 'InputAlignExternal/worker/obstacles.py',
+        'InputAlignWorker/obstacle-sensor.json': ROOT / 'InputAlignExternal/worker/obstacle-sensor.json',
         'README.md': ROOT / 'InputAlignExternal/README.md',
     }
     before = {name: sha(files[name]) if name in files else None for name in replacements}
@@ -51,14 +53,15 @@ def package(output):
         provenance['sha256'][name] = sha(files[name])
     provenance['workerPatch'] = {
         'generatedBy': 'CodeRabbit Coding Agent',
-        'id': 'physical-core-isolation-4',
+        'id': 'obstacle-distance-sensor-5',
         'originalArchiveSha256': sha(original.read_bytes()),
         'originalFileSha256': before,
         'changes': ['Reject the attempt after initialization or replay errors; keep the worker running.',
                     'Discard older attempts and prefer the newer input epoch for packets at the same tick.',
                     'Reuse one exact successful prediction after fresh state validation; retry incomplete searches.',
                     'Reject Stop/Pause/Resume levels before constructing an unverified model.',
-                    'Optionally reserve one physical CPU core for the worker, verify masks and restore on normal exit; GPU unchanged.'],
+                    'Optionally reserve one physical CPU core for the worker, verify masks and restore on normal exit; GPU unchanged.',
+                    'Report nearby modeled hitboxes; optionally suppress out-of-range searches without reducing verification horizon.'],
         'nativeBinariesRebuilt': False,
         'validation': 'Python regression tests on Linux; Windows and gameplay not tested.',
         'sourceArchive': 'InputAlignExternal-v0.3-source.zip',

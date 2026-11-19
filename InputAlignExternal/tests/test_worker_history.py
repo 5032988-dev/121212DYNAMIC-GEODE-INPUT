@@ -34,6 +34,7 @@ class HistoryTests(unittest.TestCase):
 
     def test_real_predictor_blocks_failed_attempt_and_resets_on_restart(self):
         predictor = object.__new__(Predictor)
+        predictor.obstacle_sensor = None
         predictor.session, predictor.tick, predictor.rejected = 1, 0, False
         predictor.state = object()
         predictor.sim = Mock(unsupported={})

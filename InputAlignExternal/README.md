@@ -59,7 +59,30 @@ Al terminar normalmente, por Ctrl+C o por error Python, se restauran las afinida
 
 Esto separa dónde pueden ejecutarse GD y el worker; otros procesos de Windows aún pueden utilizar esos núcleos. Comparten cachés, memoria, energía y temperatura. En 4 núcleos GD queda con 3, lo cual puede empeorar su rendimiento; compara activado/desactivado antes de adoptarlo. No garantiza cumplir 6/3 ms ni eliminar bajones.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:a2a9009f7a8b4b88858bc5f28ab3be401904abac2d73db4b21b7519b31010eaf -->
+
+## Sensor de obstáculos y distancia ajustable
+
+El worker incluye `obstacles.py` y `obstacle-sensor.json`. Detecta sólidos, pendientes y peligros (pinchos, sierras y zonas de daño conocidas) usando sus límites transformados en **el modelo cargado**. No captura hitboxes vivas de GD ni descubre objetos desconocidos de otros mods. Sus resultados aparecen en el estado de IAX y del CMD, actualizado aproximadamente una vez por segundo.
+
+```json
+{
+  "distance": 600,
+  "limit_search": false
+}
+```
+
+Edita el archivo junto a main.py y reinicia la consola. `distance` admite 0–12000 unidades GD (30 = una casilla). Alternativa: `--obstacle-distance 900` junto a `--bridge`. Se mide la distancia horizontal desde el centro del jugador al borde de la caja envolvente más cercana por delante; incluye cajas que ya cruzan X del jugador. Se ignora Y a propósito: puede detectar suelo, techos y objetos que no vayan a chocar. No es una prueba de peligro.
+
+Con `limit_search: false`, informa sin limitar las búsquedas existentes. Con `true`, omite una búsqueda solo cuando el índice estático no encuentra ningún obstáculo dentro de la distancia. **Esta opción puede perder correcciones útiles**, por ejemplo por límites del escenario, huecos o efectos de un portal fuera del radio. Es una restricción voluntaria de activación; no aumenta por sí misma la compatibilidad física. El estado real se valida también en consultas omitidas. No acorta el horizonte, no aumenta Corrections y no crea pulsaciones.
+
+Si el nivel contiene geometría dinámica, el sensor se declara no disponible y deja continuar la búsqueda normal: no usa posiciones iniciales como si fueran actuales. No modifica el rechazo de mecánicas desconocidas. Portales, pads y orbs no se clasifican como obstáculos de daño/soporte. El índice se prepara una vez y la consulta usa búsqueda binaria; no recorre todos los objetos por tick. La distancia del sensor se añade a la cadencia de estado existente y no genera un paquete por cambio de distancia.
+
 ## Estado de la simulación de bloques personalizados
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 Un bloque construido con objetos conocidos conserva las colisiones de sus componentes según el modelo existente: sólidos, pendientes, peligros y sus propiedades admitidas. Su aspecto visual no determina la colisión. Las transformaciones estáticas conocidas ya se procesan; no se ha añadido física nueva en esta actualización.
 
